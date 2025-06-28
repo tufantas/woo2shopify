@@ -1,0 +1,230 @@
+{% comment %}
+  WooCommerce Product Video Integration
+  Bu dosya mevcut tema yapısına uygun olarak ürün videolarını entegre eder.
+  
+  Kullanım:
+  1. Bu kodu product.liquid veya product-form.liquid dosyasına ekleyin
+  2. Mevcut tema stillerini kullanarak video gösterimi yapar
+  3. WooCommerce'den aktarılan video metafield'larını okur
+{% endcomment %}
+
+{%- liquid
+  assign product_video_url = product.metafields.custom.product_video_url
+  assign product_video_urls = product.metafields.custom.product_video_urls
+  assign video_description = product.metafields.custom.product_video_description
+-%}
+
+{% comment %} Tek video varsa {% endcomment %}
+{%- if product_video_url != blank -%}
+  <div class="vela-section video-section product-video-section">
+    <div class="container">
+      <div class="video-section__content rounded-3">
+        <div class="video-section__media">
+          {%- liquid
+            assign video_type = 'external'
+            assign video = product_video_url
+            assign aspect_ratio = 'sixteen-nine'
+            assign video_title = product.title | append: ' - Product Video'
+          -%}
+          
+          {%- comment -%} Mevcut tema video render'ını kullan {%- endcomment -%}
+          {%- render 'media-video', 
+              video: video, 
+              type: video_type, 
+              aspect_ratio: aspect_ratio, 
+              video_title: video_title, 
+              autoplay: false, 
+              controls: true, 
+              loop: false, 
+              muted: false 
+          -%}
+        </div>
+        
+        {%- if video_description != blank -%}
+          <div class="video-section__caption">
+            <div class="video-section__text video-section__element text">
+              {{ video_description }}
+            </div>
+          </div>
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+
+{% comment %} Birden fazla video varsa {% endcomment %}
+{%- elsif product_video_urls != blank -%}
+  {%- assign video_array = product_video_urls | split: ',' -%}
+  {%- if video_array.size > 1 -%}
+    <div class="vela-section video-section product-videos-section">
+      <div class="container">
+        <div class="video-section__content rounded-3">
+          <div class="video-section__caption">
+            <div class="video-section__text video-section__element h3">
+              {{ 'products.product.videos_title' | t | default: 'Product Videos' }}
+            </div>
+          </div>
+          
+          <div class="product-videos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            {%- for video_url in video_array -%}
+              {%- assign trimmed_url = video_url | strip -%}
+              {%- if trimmed_url != blank -%}
+                <div class="video-section__media">
+                  {%- liquid
+                    assign video_type = 'external'
+                    assign video = trimmed_url
+                    assign aspect_ratio = 'sixteen-nine'
+                    assign video_title = product.title | append: ' - Video ' | append: forloop.index
+                  -%}
+                  
+                  {%- render 'media-video', 
+                      video: video, 
+                      type: video_type, 
+                      aspect_ratio: aspect_ratio, 
+                      video_title: video_title, 
+                      autoplay: false, 
+                      controls: true, 
+                      loop: false, 
+                      muted: false 
+                  -%}
+                </div>
+              {%- endif -%}
+            {%- endfor -%}
+          </div>
+        </div>
+      </div>
+    </div>
+  {%- endif -%}
+{%- endif -%}
+
+{% comment %} Fallback: Eğer media-video render'ı yoksa basit HTML5 video kullan {% endcomment %}
+{%- unless templates contains 'media-video' -%}
+  {%- if product_video_url != blank -%}
+    <div class="vela-section video-section product-video-section">
+      <div class="container">
+        <div class="video-section__content rounded-3">
+          <div class="video-section__media">
+            <div class="video-wrapper" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+              <video 
+                controls 
+                preload="metadata" 
+                poster="{{ product.featured_image | img_url: '800x450' }}"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 8px;"
+                aria-label="{{ product.title }} - Product Video"
+              >
+                <source src="{{ product_video_url }}" type="video/mp4">
+                <p>{{ 'products.product.video_not_supported' | t | default: 'Your browser does not support the video tag.' }}</p>
+              </video>
+            </div>
+          </div>
+          
+          {%- if video_description != blank -%}
+            <div class="video-section__caption">
+              <div class="video-section__text video-section__element text" style="padding: 20px 0;">
+                {{ video_description }}
+              </div>
+            </div>
+          {%- endif -%}
+        </div>
+      </div>
+    </div>
+  {%- endif -%}
+{%- endunless -%}
+
+{% comment %} Video section için özel stiller {% endcomment %}
+<style>
+.product-video-section,
+.product-videos-section {
+  margin: 40px 0;
+}
+
+.product-videos-grid .video-section__media {
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-wrapper {
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-wrapper video {
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .product-videos-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+  
+  .product-video-section,
+  .product-videos-section {
+    margin: 20px 0;
+  }
+}
+
+/* Video play button overlay */
+.video-section__media {
+  position: relative;
+}
+
+.video-section__media::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.video-section__media:hover::before {
+  opacity: 1;
+}
+
+.video-section__media::after {
+  content: '▶';
+  position: absolute;
+  top: 50%;
+  left: 52%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 20px;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.video-section__media:hover::after {
+  opacity: 1;
+}
+</style>
+
+{% comment %}
+  Kullanım Talimatları:
+  
+  1. Bu kodu product.liquid dosyanızın uygun yerine (genellikle product description'dan sonra) ekleyin:
+     {% render 'product-video-integration' %}
+  
+  2. Veya doğrudan kodu product.liquid'e yapıştırın
+  
+  3. Video metafield'ları otomatik olarak görüntülenecektir:
+     - custom.product_video_url: Tek video için
+     - custom.product_video_urls: Birden fazla video için (virgülle ayrılmış)
+     - custom.product_video_description: Video açıklaması için
+  
+  4. Tema stillerinize uygun olarak CSS'i özelleştirin
+  
+  5. Çeviri anahtarlarını tema dil dosyalarınıza ekleyin:
+     - products.product.videos_title
+     - products.product.video_not_supported
+{% endcomment %}

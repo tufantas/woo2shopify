@@ -1,0 +1,153 @@
+{% comment %}
+  Shopify Product Video Template
+  Bu template, WooCommerce'den aktarılan ürün videolarını göstermek için kullanılır.
+  
+  Kullanım:
+  1. Bu kodu product.liquid veya product-form.liquid dosyasına ekleyin
+  2. Video metafield'ları otomatik olarak görüntülenecektir
+{% endcomment %}
+
+{% comment %} Video metafield'ını kontrol et {% endcomment %}
+{% assign video_url = product.metafields.custom.product_video_url %}
+
+{% if video_url != blank %}
+  <div class="product-video-section" style="margin: 20px 0;">
+    <h3 class="video-title">{{ 'products.product.video_title' | t | default: 'Product Video' }}</h3>
+    
+    <div class="product-video-container" style="position: relative; max-width: 100%; margin: 15px 0;">
+      {% comment %} HTML5 Video Player {% endcomment %}
+      <video 
+        controls 
+        preload="metadata" 
+        style="width: 100%; max-width: 600px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"
+        poster="{{ product.featured_image | img_url: '600x400' }}"
+      >
+        <source src="{{ video_url }}" type="video/mp4">
+        <p>{{ 'products.product.video_not_supported' | t | default: 'Your browser does not support the video tag.' }}</p>
+      </video>
+      
+      {% comment %} Video overlay for better UX {% endcomment %}
+      <div class="video-overlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;">
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.8;">
+          <circle cx="12" cy="12" r="12" fill="rgba(0,0,0,0.6)"/>
+          <polygon points="10,8 16,12 10,16" fill="white"/>
+        </svg>
+      </div>
+    </div>
+    
+    {% comment %} Video description if available {% endcomment %}
+    {% assign video_description = product.metafields.custom.product_video_description %}
+    {% if video_description != blank %}
+      <p class="video-description" style="font-size: 14px; color: #666; margin-top: 10px;">
+        {{ video_description }}
+      </p>
+    {% endif %}
+  </div>
+
+  {% comment %} Video JavaScript for better control {% endcomment %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const video = document.querySelector('.product-video-container video');
+      const overlay = document.querySelector('.video-overlay');
+      
+      if (video && overlay) {
+        // Hide overlay when video starts playing
+        video.addEventListener('play', function() {
+          overlay.style.display = 'none';
+        });
+        
+        // Show overlay when video is paused
+        video.addEventListener('pause', function() {
+          overlay.style.display = 'block';
+        });
+        
+        // Show overlay when video ends
+        video.addEventListener('ended', function() {
+          overlay.style.display = 'block';
+        });
+        
+        // Click overlay to play video
+        overlay.addEventListener('click', function() {
+          video.play();
+        });
+      }
+    });
+  </script>
+
+  {% comment %} CSS for responsive video {% endcomment %}
+  <style>
+    .product-video-container {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .product-video-container video {
+      display: block;
+    }
+    
+    .video-overlay {
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+    
+    .video-overlay:hover {
+      opacity: 1 !important;
+    }
+    
+    @media (max-width: 768px) {
+      .product-video-container {
+        width: 100%;
+      }
+      
+      .product-video-container video {
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+{% endif %}
+
+{% comment %} Multiple videos support {% endcomment %}
+{% assign video_urls = product.metafields.custom.product_video_urls %}
+{% if video_urls != blank %}
+  {% assign video_array = video_urls | split: ',' %}
+  {% if video_array.size > 1 %}
+    <div class="product-videos-gallery" style="margin: 20px 0;">
+      <h3>{{ 'products.product.videos_title' | t | default: 'Product Videos' }}</h3>
+      
+      <div class="videos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">
+        {% for video_url in video_array %}
+          {% assign trimmed_url = video_url | strip %}
+          {% if trimmed_url != blank %}
+            <div class="video-item">
+              <video 
+                controls 
+                preload="metadata" 
+                style="width: 100%; height: auto; border-radius: 8px;"
+                poster="{{ product.featured_image | img_url: '400x300' }}"
+              >
+                <source src="{{ trimmed_url }}" type="video/mp4">
+                <p>{{ 'products.product.video_not_supported' | t | default: 'Your browser does not support the video tag.' }}</p>
+              </video>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
+{% comment %} 
+  Kullanım Notları:
+  
+  1. Bu template'i product.liquid dosyanızın uygun yerine ekleyin
+  2. Video metafield'ları otomatik olarak görüntülenecektir
+  3. Responsive tasarım mobil cihazlarda da çalışır
+  4. Video overlay'i daha iyi kullanıcı deneyimi sağlar
+  5. Birden fazla video desteği mevcuttur
+  
+  Özelleştirme:
+  - CSS stillerini tema renk paletinize uygun şekilde değiştirin
+  - Video boyutlarını ihtiyacınıza göre ayarlayın
+  - Çeviri anahtarlarını tema dil dosyalarınıza ekleyin
+{% endcomment %}
