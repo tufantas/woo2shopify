@@ -50,10 +50,10 @@ class Woo2Shopify_Shopify_API {
      * Constructor
      */
     public function __construct() {
-        $this->store_url = woo2shopify_get_option('shopify_store_url');
-        $this->access_token = woo2shopify_get_option('shopify_access_token');
-        $this->api_key = woo2shopify_get_option('shopify_api_key');
-        $this->api_secret = woo2shopify_get_option('shopify_api_secret');
+        $this->store_url = get_option('woo2shopify_shopify_store_url');
+        $this->access_token = get_option('woo2shopify_shopify_access_token');
+        $this->api_key = get_option('woo2shopify_shopify_api_key');
+        $this->api_secret = get_option('woo2shopify_shopify_api_secret');
     }
     
     /**
@@ -195,13 +195,32 @@ class Woo2Shopify_Shopify_API {
      */
     public function create_collection($collection_data) {
         $this->check_rate_limit();
-        
+
         $response = $this->make_request('POST', 'custom_collections.json', array(
             'custom_collection' => $collection_data
         ));
-        
+
         if (is_wp_error($response)) {
-            return $response;
+            // Check if it's a duplicate handle error
+            if (strpos($response->get_error_message(), 'handle') !== false &&
+                strpos($response->get_error_message(), 'already been taken') !== false) {
+
+                // Try with a modified handle
+                $original_handle = $collection_data['handle'];
+                $collection_data['handle'] = $original_handle . '-' . time();
+
+                woo2shopify_log("Collection handle '$original_handle' already exists, trying with '{$collection_data['handle']}'", 'warning');
+
+                $response = $this->make_request('POST', 'custom_collections.json', array(
+                    'custom_collection' => $collection_data
+                ));
+
+                if (is_wp_error($response)) {
+                    return $response;
+                }
+            } else {
+                return $response;
+            }
         }
         
         return isset($response['custom_collection']) ? $response['custom_collection'] : false;
@@ -223,7 +242,53 @@ class Woo2Shopify_Shopify_API {
         
         return isset($response['custom_collections']) ? $response['custom_collections'] : array();
     }
-    
+
+    /**
+     * Add product to collection
+     */
+    public function add_product_to_collection($collection_id, $product_id) {
+        $this->check_rate_limit();
+
+        woo2shopify_log("Adding product $product_id to collection $collection_id", 'info');
+
+        $response = $this->make_request('POST', "custom_collections/{$collection_id}/collects.json", array(
+            'collect' => array(
+                'product_id' => $product_id,
+                'collection_id' => $collection_id
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            woo2shopify_log("Failed to add product to collection: " . $response->get_error_message(), 'error');
+            return $response;
+        }
+
+        woo2shopify_log("Successfully added product $product_id to collection $collection_id", 'info');
+        return $response['collect'];
+    }
+
+    /**
+     * Get collection by handle
+     */
+    public function get_collection_by_handle($handle) {
+        $this->check_rate_limit();
+
+        $response = $this->make_request('GET', 'custom_collections.json', array(
+            'handle' => $handle,
+            'limit' => 1
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if (!empty($response['custom_collections'])) {
+            return $response['custom_collections'][0];
+        }
+
+        return null;
+    }
+
     /**
      * Upload an image
      */
@@ -248,6 +313,23 @@ class Woo2Shopify_Shopify_API {
         $this->check_rate_limit();
 
         $response = $this->make_request('POST', "products/{$product_id}/metafields.json", array(
+            'metafield' => $metafield_data
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return isset($response['metafield']) ? $response['metafield'] : false;
+    }
+
+    /**
+     * Create collection metafield
+     */
+    public function create_collection_metafield($collection_id, $metafield_data) {
+        $this->check_rate_limit();
+
+        $response = $this->make_request('POST', "custom_collections/{$collection_id}/metafields.json", array(
             'metafield' => $metafield_data
         ));
 
@@ -343,9 +425,23 @@ class Woo2Shopify_Shopify_API {
             return new WP_Error('rate_limited', __('Rate limit exceeded. Please try again later.', 'woo2shopify'));
         } elseif ($response_code >= 400) {
             $error_data = json_decode($response_body, true);
-            $error_message = isset($error_data['errors']) ? 
-                (is_array($error_data['errors']) ? implode(', ', $error_data['errors']) : $error_data['errors']) :
-                sprintf(__('HTTP Error %d', 'woo2shopify'), $response_code);
+            $error_message = sprintf(__('HTTP Error %d', 'woo2shopify'), $response_code);
+
+            if (isset($error_data['errors'])) {
+                if (is_array($error_data['errors'])) {
+                    $error_parts = array();
+                    foreach ($error_data['errors'] as $field => $messages) {
+                        if (is_array($messages)) {
+                            $error_parts[] = $field . ': ' . implode(', ', $messages);
+                        } else {
+                            $error_parts[] = $field . ': ' . $messages;
+                        }
+                    }
+                    $error_message = implode('; ', $error_parts);
+                } else {
+                    $error_message = $error_data['errors'];
+                }
+            }
             
             return new WP_Error('api_error', $error_message, array('response_code' => $response_code));
         }

@@ -20,12 +20,24 @@ class Woo2Shopify_Data_Mapper {
      */
     public function __construct() {
         $this->video_processor = new Woo2Shopify_Video_Processor();
+        $this->langify_api = new Woo2Shopify_Langify_API();
     }
 
     /**
      * Convert WooCommerce product to Shopify format
      */
     public function map_product($wc_product_data) {
+        // Debug: Check if functions exist
+        if (!function_exists('woo2shopify_sanitize_handle')) {
+            error_log('Woo2Shopify: woo2shopify_sanitize_handle function not found!');
+            throw new Exception('Required function woo2shopify_sanitize_handle not found');
+        }
+
+        if (!function_exists('woo2shopify_convert_product_status')) {
+            error_log('Woo2Shopify: woo2shopify_convert_product_status function not found!');
+            throw new Exception('Required function woo2shopify_convert_product_status not found');
+        }
+
         $shopify_product = array(
             'title' => $this->sanitize_title($wc_product_data['name']),
             'body_html' => $this->format_description($wc_product_data),
@@ -94,8 +106,8 @@ class Woo2Shopify_Data_Mapper {
             $description .= $specs;
         }
 
-        // Clean and process HTML content
-        $description = $this->clean_html_content($description);
+        // Preserve HTML formatting
+        $description = $this->preserve_html_formatting($description);
 
         return $description;
     }
@@ -483,7 +495,9 @@ class Woo2Shopify_Data_Mapper {
      * Format price
      */
     private function format_price($price) {
-        return !empty($price) ? number_format((float)$price, 2, '.', '') : '0.00';
+        $formatted = !empty($price) ? number_format((float)$price, 2, '.', '') : '0.00';
+        error_log("Woo2Shopify: Price formatting - Input: {$price}, Output: {$formatted}");
+        return $formatted;
     }
     
     /**
@@ -583,32 +597,73 @@ class Woo2Shopify_Data_Mapper {
             'type' => 'single_line_text_field'
         );
 
-        // Add translations as metafields (compatible with Shopify Translate & Adapt)
+        // Debug: Check if translations exist
+        woo2shopify_log("Product translations data: " . json_encode($wc_product_data['translations'] ?? 'No translations'), 'debug');
+
+        // Add translations as metafields (Multiple format support)
         if (!empty($wc_product_data['translations'])) {
-            // Legacy format for backward compatibility
+            error_log('Woo2Shopify: Adding translation metafields for languages: ' . implode(', ', array_keys($wc_product_data['translations'])));
+
             foreach ($wc_product_data['translations'] as $lang_code => $translation) {
+                // Ensure HTML formatting is preserved
+                $description = $this->preserve_html_formatting($translation['description']);
+                $short_description = $this->preserve_html_formatting($translation['short_description']);
+
+                // Format 1: Langify App format (correct namespace and keys)
+                $metafields[] = array(
+                    'namespace' => 'langify',
+                    'key' => "title_{$lang_code}",
+                    'value' => $translation['name'],
+                    'type' => 'single_line_text_field'
+                );
+
+                $metafields[] = array(
+                    'namespace' => 'langify',
+                    'key' => "body_html_{$lang_code}",
+                    'value' => $description,
+                    'type' => 'rich_text_field'
+                );
+
+                // Langify specific metafields for theme integration
+                $metafields[] = array(
+                    'namespace' => 'langify',
+                    'key' => "seo_title_{$lang_code}",
+                    'value' => $translation['name'],
+                    'type' => 'single_line_text_field'
+                );
+
+                $metafields[] = array(
+                    'namespace' => 'langify',
+                    'key' => "seo_description_{$lang_code}",
+                    'value' => strip_tags($short_description),
+                    'type' => 'single_line_text_field'
+                );
+
+                if (!empty($short_description)) {
+                    $metafields[] = array(
+                        'namespace' => 'langify',
+                        'key' => "excerpt_{$lang_code}",
+                        'value' => $short_description,
+                        'type' => 'rich_text_field'
+                    );
+                }
+
+                // Format 2: Shopify Translate & Adapt compatible
                 $metafields[] = array(
                     'namespace' => 'translations',
-                    'key' => $lang_code . '_title',
+                    'key' => "title_{$lang_code}",
                     'value' => $translation['name'],
                     'type' => 'single_line_text_field'
                 );
 
                 $metafields[] = array(
                     'namespace' => 'translations',
-                    'key' => $lang_code . '_description',
-                    'value' => $translation['description'],
-                    'type' => 'multi_line_text_field'
+                    'key' => "body_html_{$lang_code}",
+                    'value' => $description,
+                    'type' => 'rich_text_field'
                 );
 
-                if (!empty($translation['short_description'])) {
-                    $metafields[] = array(
-                        'namespace' => 'translations',
-                        'key' => $lang_code . '_short_description',
-                        'value' => $translation['short_description'],
-                        'type' => 'multi_line_text_field'
-                    );
-                }
+                error_log("Woo2Shopify: Added translation metafields for language: {$lang_code}");
             }
 
             // Shopify Translate & Adapt compatible format
@@ -619,6 +674,35 @@ class Woo2Shopify_Data_Mapper {
                     'description' => $translation['description'],
                     'short_description' => $translation['short_description'] ?? ''
                 );
+            }
+
+            // Shopify Translate & Adapt specific format
+            foreach ($wc_product_data['translations'] as $lang_code => $translation) {
+                // Title translation
+                $metafields[] = array(
+                    'namespace' => 'custom',
+                    'key' => "translation_title_{$lang_code}",
+                    'value' => $translation['name'],
+                    'type' => 'single_line_text_field'
+                );
+
+                // Description translation
+                $metafields[] = array(
+                    'namespace' => 'custom',
+                    'key' => "translation_description_{$lang_code}",
+                    'value' => $translation['description'],
+                    'type' => 'multi_line_text_field'
+                );
+
+                // Short description translation
+                if (!empty($translation['short_description'])) {
+                    $metafields[] = array(
+                        'namespace' => 'custom',
+                        'key' => "translation_excerpt_{$lang_code}",
+                        'value' => $translation['short_description'],
+                        'type' => 'multi_line_text_field'
+                    );
+                }
             }
 
             // Store as JSON for Shopify Translate & Adapt
@@ -636,6 +720,8 @@ class Woo2Shopify_Data_Mapper {
                 'value' => implode(',', array_keys($wc_product_data['translations'])),
                 'type' => 'single_line_text_field'
             );
+
+            woo2shopify_log("Added translation metafields for languages: " . implode(', ', array_keys($wc_product_data['translations'])), 'info');
         }
 
         // Add multi-currency prices as metafields
@@ -730,5 +816,32 @@ class Woo2Shopify_Data_Mapper {
             'sort_order' => 'best-selling',
             'published' => true
         );
+    }
+
+    /**
+     * Preserve HTML formatting for rich text content
+     */
+    private function preserve_html_formatting($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // Clean up WordPress-specific formatting
+        $content = str_replace(array("\r\n", "\r"), "\n", $content);
+
+        // Preserve paragraphs
+        $content = wpautop($content);
+
+        // Clean up extra whitespace but preserve structure
+        $content = preg_replace('/\n\s*\n/', "\n\n", $content);
+        $content = trim($content);
+
+        // Ensure proper HTML structure
+        if (!empty($content) && strpos($content, '<p>') === false && strpos($content, '<div>') === false) {
+            // Wrap plain text in paragraphs
+            $content = '<p>' . nl2br($content) . '</p>';
+        }
+
+        return $content;
     }
 }

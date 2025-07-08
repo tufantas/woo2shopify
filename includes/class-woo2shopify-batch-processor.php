@@ -130,7 +130,11 @@ class Woo2Shopify_Batch_Processor {
             );
 
         } catch (Exception $e) {
-            error_log('Woo2Shopify: Migration start exception: ' . $e->getMessage());
+            woo2shopify_log('Migration start exception: ' . $e->getMessage(), 'error');
+            woo2shopify_log('Exception file: ' . $e->getFile(), 'error');
+            woo2shopify_log('Exception line: ' . $e->getLine(), 'error');
+            woo2shopify_log('Exception trace: ' . $e->getTraceAsString(), 'error');
+
             $this->logger->log($this->migration_id, null, 'migration_start', 'error', $e->getMessage());
 
             return array(
@@ -151,13 +155,14 @@ class Woo2Shopify_Batch_Processor {
     private function schedule_batch_processing() {
         error_log('Woo2Shopify: Scheduling batch processing...');
 
-        // Use WordPress cron for background processing
-        $scheduled = wp_schedule_single_event(time(), 'woo2shopify_process_batch', array($this->migration_id, 0));
+        // Try WordPress cron first - give more time for initialization
+        $scheduled = wp_schedule_single_event(time() + 10, 'woo2shopify_process_batch', array($this->migration_id, 0));
         error_log('Woo2Shopify: Cron scheduled: ' . ($scheduled ? 'success' : 'failed'));
 
-        // Immediate processing disabled to prevent blocking
-        // Will be handled by cron or manual trigger
-        error_log('Woo2Shopify: Immediate processing skipped - will use cron');
+        // Also schedule delayed fallback processing
+        error_log('Woo2Shopify: Starting delayed processing as fallback...');
+        wp_schedule_single_event(time() + 15, 'woo2shopify_process_batch', array($this->migration_id, 0));
+        error_log('Woo2Shopify: Delayed trigger scheduled: success');
     }
     
     /**
@@ -209,6 +214,9 @@ class Woo2Shopify_Batch_Processor {
                     $batch_results['failed']++;
                 }
 
+                // Update progress after each product for real-time tracking
+                $this->update_single_product_progress($batch_results['successful'], $batch_results['failed']);
+
                 // Add delay between products to prevent API overload
                 if ($index < count($products) - 1) { // Don't sleep after last product
                     error_log('Woo2Shopify: Waiting 1 second before next product...');
@@ -228,7 +236,24 @@ class Woo2Shopify_Batch_Processor {
             
             // Schedule next batch
             $next_offset = $offset + $this->batch_size;
+
+            // Try cron first
             wp_schedule_single_event(time() + 5, 'woo2shopify_process_batch', array($migration_id, $next_offset));
+
+            // Also trigger via AJAX as fallback
+            $trigger_url = admin_url('admin-ajax.php');
+            $trigger_args = array(
+                'timeout' => 1,
+                'blocking' => false,
+                'body' => array(
+                    'action' => 'woo2shopify_trigger_batch',
+                    'migration_id' => $migration_id,
+                    'offset' => $next_offset,
+                    'nonce' => wp_create_nonce('woo2shopify_nonce'),
+                    'delay' => 5
+                )
+            );
+            wp_remote_post($trigger_url, $trigger_args);
             
         } catch (Exception $e) {
             $this->logger->log($migration_id, null, 'batch_error', 'error', $e->getMessage());
@@ -241,7 +266,13 @@ class Woo2Shopify_Batch_Processor {
      */
     private function process_single_product($wc_product_data) {
         $product_id = $wc_product_data['id'];
-        
+
+        // Check if this product was already processed in this migration
+        if ($this->is_product_already_processed($product_id)) {
+            error_log("Woo2Shopify: SKIPPING duplicate product {$product_id} - already processed in this migration");
+            return array('success' => true, 'skipped' => true, 'reason' => 'Already processed');
+        }
+
         try {
             // Map WooCommerce data to Shopify format
             $shopify_product_data = $this->data_mapper->map_product($wc_product_data);
@@ -268,45 +299,40 @@ class Woo2Shopify_Batch_Processor {
                 $media_results['images'] = $image_results;
             }
 
-            // Migrate media (images + videos)
-            if (woo2shopify_get_option('include_videos', true) && !empty($wc_product_data['media'])) {
-                error_log('Woo2Shopify: Migrating media (images + videos) for product: ' . $product_id);
-                $media_migration_results = $this->image_migrator->migrate_product_media(
-                    $product_id,
-                    $wc_product_data['media'],
-                    $shopify_product_id
-                );
-                $media_results['media'] = $media_migration_results;
-
-                // Log video migration results
-                if (!empty($media_migration_results['errors'])) {
-                    foreach ($media_migration_results['errors'] as $error) {
-                        if ($error['type'] === 'video') {
-                            $this->logger->log($this->migration_id, $product_id, 'video_failed', 'error',
-                                'Video migration failed: ' . $error['error']);
-                        }
-                    }
+            // Migrate images first (always safe)
+            if (woo2shopify_get_option('include_images', true) && !empty($wc_product_data['images'])) {
+                try {
+                    $image_results = $this->image_migrator->migrate_product_images(
+                        $product_id,
+                        $wc_product_data['images'],
+                        $shopify_product_id
+                    );
+                    $media_results['images'] = $image_results;
+                } catch (Exception $e) {
+                    error_log('Woo2Shopify: Image migration exception for product ' . $product_id . ': ' . $e->getMessage());
+                    // Continue even if images fail
                 }
             }
 
-            // Process videos found in product description
-            if (woo2shopify_get_option('include_videos', true)) {
-                $description_videos = $this->data_mapper->process_description_videos($product_id, $shopify_product_id);
-                if (!empty($description_videos)) {
-                    error_log('Woo2Shopify: Processed ' . count($description_videos) . ' videos from product description');
-                    $media_results['description_videos'] = $description_videos;
-                }
+            // Video processing - DISABLED for now to prevent stuck migrations
+            // Videos will be handled separately in a dedicated video migration tool
+            if (false && woo2shopify_get_option('include_videos', true)) {
+                error_log('Woo2Shopify: Video processing is temporarily disabled to prevent stuck migrations');
+                error_log('Woo2Shopify: Use the dedicated Video Migration tool instead');
             }
 
-            // Create collections if enabled
+            // Create collections and add product to them
             if (woo2shopify_get_option('include_categories', true) && !empty($wc_product_data['categories'])) {
-                $this->create_collections($wc_product_data['categories']);
+                $this->create_collections_and_add_product($wc_product_data['categories'], $shopify_product_id);
             }
             
             // Log success
-            $this->logger->log($this->migration_id, $product_id, 'product_created', 'success', 
+            $this->logger->log($this->migration_id, $product_id, 'product_created', 'success',
                 sprintf(__('Product migrated successfully (Shopify ID: %s)', 'woo2shopify'), $shopify_product_id),
                 $shopify_product_id);
+
+            // Mark as processed
+            $this->mark_product_as_processed($product_id, $shopify_product_id);
             
             return array(
                 'success' => true,
@@ -326,57 +352,145 @@ class Woo2Shopify_Batch_Processor {
     }
     
     /**
-     * Create collections from categories
+     * Create collections and add product to them
      */
-    private function create_collections($categories) {
+    private function create_collections_and_add_product($categories, $shopify_product_id) {
         static $created_collections = array();
-        
+
         foreach ($categories as $category) {
             $collection_handle = woo2shopify_sanitize_handle($category['slug']);
-            
-            // Skip if already created
-            if (in_array($collection_handle, $created_collections)) {
-                continue;
-            }
-            
-            try {
-                $collection_data = $this->data_mapper->map_collection($category);
-                $result = $this->shopify_api->create_collection($collection_data);
-                
-                if (!is_wp_error($result)) {
-                    $created_collections[] = $collection_handle;
-                    $this->logger->log($this->migration_id, null, 'collection_created', 'success',
-                        sprintf(__('Collection created: %s', 'woo2shopify'), $category['name']));
+            $collection_id = null;
+
+            // Check if collection already exists
+            if (isset($created_collections[$collection_handle])) {
+                $collection_id = $created_collections[$collection_handle];
+                woo2shopify_log("Using existing collection: {$category['name']} (ID: $collection_id)", 'info');
+            } else {
+                // Try to get existing collection first
+                $existing_collection = $this->shopify_api->get_collection_by_handle($collection_handle);
+
+                if ($existing_collection) {
+                    $collection_id = $existing_collection['id'];
+                    $created_collections[$collection_handle] = $collection_id;
+                    woo2shopify_log("Found existing collection: {$category['name']} (ID: $collection_id)", 'info');
+                } else {
+                    // Create new collection
+                    try {
+                        $collection_data = $this->data_mapper->map_collection($category);
+                        $result = $this->shopify_api->create_collection($collection_data);
+
+                        if (!is_wp_error($result)) {
+                            $collection_id = $result['id'];
+                            $created_collections[$collection_handle] = $collection_id;
+                            $this->logger->log($this->migration_id, null, 'collection_created', 'success',
+                                sprintf(__('Collection created: %s (ID: %s)', 'woo2shopify'), $category['name'], $collection_id));
+                            woo2shopify_log("Created new collection: {$category['name']} (ID: $collection_id)", 'info');
+                        } else {
+                            woo2shopify_log("Failed to create collection {$category['name']}: " . $result->get_error_message(), 'error');
+                            continue;
+                        }
+
+                    } catch (Exception $e) {
+                        $this->logger->log($this->migration_id, null, 'collection_failed', 'error',
+                            sprintf(__('Failed to create collection %s: %s', 'woo2shopify'), $category['name'], $e->getMessage()));
+                        woo2shopify_log("Exception creating collection {$category['name']}: " . $e->getMessage(), 'error');
+                        continue;
+                    }
                 }
-                
-            } catch (Exception $e) {
-                $this->logger->log($this->migration_id, null, 'collection_failed', 'error',
-                    sprintf(__('Failed to create collection %s: %s', 'woo2shopify'), $category['name'], $e->getMessage()));
+            }
+
+            // Add product to collection
+            if ($collection_id) {
+                try {
+                    $result = $this->shopify_api->add_product_to_collection($collection_id, $shopify_product_id);
+
+                    if (!is_wp_error($result)) {
+                        woo2shopify_log("Added product $shopify_product_id to collection {$category['name']}", 'info');
+                        $this->logger->log($this->migration_id, null, 'product_added_to_collection', 'success',
+                            sprintf(__('Product added to collection: %s', 'woo2shopify'), $category['name']));
+                    } else {
+                        woo2shopify_log("Failed to add product to collection {$category['name']}: " . $result->get_error_message(), 'error');
+                    }
+
+                } catch (Exception $e) {
+                    woo2shopify_log("Exception adding product to collection {$category['name']}: " . $e->getMessage(), 'error');
+                }
             }
         }
     }
     
     /**
-     * Update batch progress
+     * Update progress after single product (real-time updates)
      */
-    private function update_batch_progress($successful, $failed) {
+    private function update_single_product_progress($successful_in_batch, $failed_in_batch) {
         $progress = woo2shopify_get_progress($this->migration_id);
-        
+
         if ($progress) {
-            $new_processed = $progress->processed_products + $successful + $failed;
-            $new_successful = $progress->successful_products + $successful;
-            $new_failed = $progress->failed_products + $failed;
-            
+            // Calculate current totals based on batch progress
+            $current_batch_processed = $successful_in_batch + $failed_in_batch;
+            $new_processed = $progress->processed_products + $current_batch_processed;
+            $new_successful = $progress->successful_products + $successful_in_batch;
+            $new_failed = $progress->failed_products + $failed_in_batch;
+
+            // Calculate percentage
+            $percentage = $progress->total_products > 0 ?
+                round(($new_processed / $progress->total_products) * 100, 1) : 0;
+
+            // Update with current progress
             woo2shopify_update_progress($this->migration_id, array(
                 'processed_products' => $new_processed,
                 'successful_products' => $new_successful,
                 'failed_products' => $new_failed,
+                'percentage' => $percentage,
                 'status_message' => sprintf(
-                    __('Processed %d of %d products', 'woo2shopify'),
+                    __('Processing... %d of %d products (%s%%) - Success: %d, Failed: %d', 'woo2shopify'),
                     $new_processed,
-                    $progress->total_products
+                    $progress->total_products,
+                    $percentage,
+                    $new_successful,
+                    $new_failed
                 )
             ));
+
+            // Log progress for debugging
+            error_log("Woo2Shopify: Real-time progress - {$new_processed}/{$progress->total_products} ({$percentage}%) - Success: {$new_successful}, Failed: {$new_failed}");
+        }
+    }
+
+    /**
+     * Update batch progress (legacy - kept for compatibility)
+     */
+    private function update_batch_progress($successful, $failed) {
+        // This is now handled by update_single_product_progress for real-time updates
+        // But we'll keep this for final batch completion
+        $progress = woo2shopify_get_progress($this->migration_id);
+
+        if ($progress) {
+            $new_processed = $progress->processed_products + $successful + $failed;
+            $new_successful = $progress->successful_products + $successful;
+            $new_failed = $progress->failed_products + $failed;
+
+            // Calculate percentage
+            $percentage = $progress->total_products > 0 ?
+                round(($new_processed / $progress->total_products) * 100, 1) : 0;
+
+            woo2shopify_update_progress($this->migration_id, array(
+                'processed_products' => $new_processed,
+                'successful_products' => $new_successful,
+                'failed_products' => $new_failed,
+                'percentage' => $percentage,
+                'status_message' => sprintf(
+                    __('Batch completed - %d of %d products (%s%%) - Success: %d, Failed: %d', 'woo2shopify'),
+                    $new_processed,
+                    $progress->total_products,
+                    $percentage,
+                    $new_successful,
+                    $new_failed
+                )
+            ));
+
+            // Log batch completion
+            error_log("Woo2Shopify: Batch completed - {$new_processed}/{$progress->total_products} ({$percentage}%) - Success: {$new_successful}, Failed: {$new_failed}");
         }
     }
     
@@ -508,6 +622,36 @@ class Woo2Shopify_Batch_Processor {
             'images' => $image_stats,
             'logs_count' => $this->logger->get_logs_count($migration_id)
         );
+    }
+
+    /**
+     * Check if product was already processed in this migration
+     */
+    private function is_product_already_processed($product_id) {
+        global $wpdb;
+
+        $log_table = $wpdb->prefix . 'woo2shopify_logs';
+
+        $count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$log_table}
+             WHERE migration_id = %s
+             AND product_id = %d
+             AND action = 'product_created'
+             AND level = 'success'",
+            $this->migration_id,
+            $product_id
+        ));
+
+        return $count > 0;
+    }
+
+    /**
+     * Mark product as processed (for future reference)
+     */
+    private function mark_product_as_processed($product_id, $shopify_id) {
+        // This is already handled by the logger in process_single_product
+        // But we can add additional tracking if needed
+        error_log("Woo2Shopify: Marked product {$product_id} as processed (Shopify ID: {$shopify_id})");
     }
 }
 

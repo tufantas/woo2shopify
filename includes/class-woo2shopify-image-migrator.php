@@ -105,14 +105,37 @@ class Woo2Shopify_Image_Migrator {
         
         // Prepare image data
         $image_data = $this->prepare_image_data($image, $is_featured);
-        
+
+        // Check if image has valid src
+        $image_src = isset($image['src']) ? $image['src'] : (isset($image['url']) ? $image['url'] : '');
+        if (empty($image_src)) {
+            woo2shopify_log("Image has no valid src/url for product $shopify_product_id", 'warning');
+            return new WP_Error('invalid_image', 'Image has no valid src/url');
+        }
+
+        // Check if this image was already uploaded for this product
+        $image_hash = md5($image_src . $shopify_product_id);
+        $uploaded_images = get_option('woo2shopify_uploaded_images', array());
+
+        if (isset($uploaded_images[$image_hash])) {
+            woo2shopify_log("Image already uploaded for product $shopify_product_id: " . $image_src, 'info');
+            return $uploaded_images[$image_hash];
+        }
+
         // Upload to Shopify
+        woo2shopify_log("Uploading new image for product $shopify_product_id: " . $image_src, 'info');
         $result = $this->shopify_api->upload_product_image($shopify_product_id, $image_data);
         
         if (is_wp_error($result)) {
             return $result;
         }
-        
+
+        // Cache the uploaded image to prevent duplicates
+        $uploaded_images[$image_hash] = $result;
+        update_option('woo2shopify_uploaded_images', $uploaded_images);
+
+        woo2shopify_log("Image uploaded successfully for product $shopify_product_id", 'info');
+
         return array(
             'wc_image_id' => $image['id'],
             'shopify_image_id' => $result['id'],
@@ -482,35 +505,75 @@ class Woo2Shopify_Image_Migrator {
             );
         }
 
+        // Mark video as pending to prevent duplicate processing
+        $cached_videos[$video_hash] = array(
+            'url' => $video['url'],
+            'migrated' => false,
+            'pending' => true,
+            'started_at' => current_time('mysql')
+        );
+        update_option('woo2shopify_cached_videos', $cached_videos);
+
         error_log('Woo2Shopify: Processing new video for product: ' . $shopify_product_id);
         error_log('Woo2Shopify: Video URL: ' . $video['url']);
 
-        // Create a metafield with the video URL
-        $metafield_data = array(
-            'namespace' => 'custom',
-            'key' => 'product_video_url',
-            'value' => $video['url'],
-            'type' => 'url'
-        );
+        try {
+            // Create a metafield with the video URL
+            $metafield_data = array(
+                'namespace' => 'custom',
+                'key' => 'product_video_url',
+                'value' => $video['url'],
+                'type' => 'url'
+            );
 
-        // Create the metafield in Shopify
-        $result = $this->shopify_api->create_product_metafield($shopify_product_id, $metafield_data);
+            // Create the metafield in Shopify
+            $result = $this->shopify_api->create_product_metafield($shopify_product_id, $metafield_data);
 
-        if (is_wp_error($result)) {
-            error_log('Woo2Shopify: Video metafield creation failed: ' . $result->get_error_message());
-            return $result;
+            if (is_wp_error($result)) {
+                error_log('Woo2Shopify: Video metafield creation failed: ' . $result->get_error_message());
+
+                // Mark as failed in cache
+                $cached_videos[$video_hash] = array(
+                    'url' => $video['url'],
+                    'migrated' => false,
+                    'pending' => false,
+                    'failed' => true,
+                    'error' => $result->get_error_message(),
+                    'failed_at' => current_time('mysql')
+                );
+                update_option('woo2shopify_cached_videos', $cached_videos);
+
+                return $result;
+            }
+
+            error_log('Woo2Shopify: Video metafield created successfully');
+
+            // Cache the successful result
+            $cached_videos[$video_hash] = array(
+                'url' => $video['url'],
+                'migrated' => true,
+                'pending' => false,
+                'metafield_id' => $result['id'] ?? null,
+                'migrated_at' => current_time('mysql')
+            );
+            update_option('woo2shopify_cached_videos', $cached_videos);
+
+        } catch (Exception $e) {
+            error_log('Woo2Shopify: Video processing exception: ' . $e->getMessage());
+
+            // Mark as failed in cache
+            $cached_videos[$video_hash] = array(
+                'url' => $video['url'],
+                'migrated' => false,
+                'pending' => false,
+                'failed' => true,
+                'error' => $e->getMessage(),
+                'failed_at' => current_time('mysql')
+            );
+            update_option('woo2shopify_cached_videos', $cached_videos);
+
+            return new WP_Error('video_processing_failed', $e->getMessage());
         }
-
-        error_log('Woo2Shopify: Video metafield created successfully');
-
-        // Cache the result
-        $cached_videos[$video_hash] = array(
-            'url' => $video['url'],
-            'migrated' => true,
-            'metafield_id' => $result['id'] ?? null,
-            'migrated_at' => current_time('mysql')
-        );
-        update_option('woo2shopify_cached_videos', $cached_videos);
 
         return array(
             'wc_video_id' => $video['id'],

@@ -35,20 +35,50 @@ class Woo2Shopify_Selective_Migrator {
             'search' => '',
             'category' => '',
             'status' => 'any',
+            'product_type' => '',
+            'migration_status' => '',
+            'price_min' => '',
+            'price_max' => '',
             'orderby' => 'date',
             'order' => 'DESC'
         );
-        
+
         $args = wp_parse_args($args, $defaults);
-        
+
         $query_args = array(
             'post_type' => 'product',
             'post_status' => $args['status'] === 'any' ? array('publish', 'draft', 'private') : $args['status'],
             'posts_per_page' => $args['limit'],
             'offset' => $args['offset'],
             'orderby' => $args['orderby'],
-            'order' => $args['order'],
-            'meta_query' => array(
+            'order' => $args['order']
+        );
+
+        // Migration status filter
+        if ($args['migration_status']) {
+            if ($args['migration_status'] === 'migrated') {
+                $query_args['meta_query'][] = array(
+                    'key' => '_woo2shopify_migrated',
+                    'value' => '1',
+                    'compare' => '='
+                );
+            } elseif ($args['migration_status'] === 'not-migrated') {
+                $query_args['meta_query'] = array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => '_woo2shopify_migrated',
+                        'compare' => 'NOT EXISTS'
+                    ),
+                    array(
+                        'key' => '_woo2shopify_migrated',
+                        'value' => '1',
+                        'compare' => '!='
+                    )
+                );
+            }
+        } else {
+            // Default: show all products
+            $query_args['meta_query'] = array(
                 'relation' => 'OR',
                 array(
                     'key' => '_woo2shopify_migrated',
@@ -58,15 +88,22 @@ class Woo2Shopify_Selective_Migrator {
                     'key' => '_woo2shopify_migrated',
                     'value' => '1',
                     'compare' => '!='
+                ),
+                array(
+                    'key' => '_woo2shopify_migrated',
+                    'value' => '1',
+                    'compare' => '='
                 )
-            )
-        );
-        
-        // Search filter
-        if (!empty($args['search'])) {
-            $query_args['s'] = $args['search'];
+            );
         }
         
+        // Search filter - enhanced to search in title, content, excerpt, and SKU
+        if (!empty($args['search'])) {
+            add_filter('posts_search', array($this, 'extend_product_search'), 10, 2);
+            $query_args['s'] = $args['search'];
+            $query_args['_search_term'] = $args['search']; // Store for our custom search
+        }
+
         // Category filter
         if (!empty($args['category'])) {
             $query_args['tax_query'] = array(
@@ -77,6 +114,52 @@ class Woo2Shopify_Selective_Migrator {
                 )
             );
         }
+
+        // Product type filter
+        if (!empty($args['product_type'])) {
+            if (!isset($query_args['meta_query'])) {
+                $query_args['meta_query'] = array();
+            }
+            $query_args['meta_query'][] = array(
+                'key' => '_product_type',
+                'value' => $args['product_type'],
+                'compare' => '='
+            );
+        }
+
+        // Price range filter
+        if (!empty($args['price_min']) || !empty($args['price_max'])) {
+            if (!isset($query_args['meta_query'])) {
+                $query_args['meta_query'] = array();
+            }
+
+            $price_query = array('relation' => 'AND');
+
+            if (!empty($args['price_min'])) {
+                $price_query[] = array(
+                    'key' => '_price',
+                    'value' => floatval($args['price_min']),
+                    'type' => 'NUMERIC',
+                    'compare' => '>='
+                );
+            }
+
+            if (!empty($args['price_max'])) {
+                $price_query[] = array(
+                    'key' => '_price',
+                    'value' => floatval($args['price_max']),
+                    'type' => 'NUMERIC',
+                    'compare' => '<='
+                );
+            }
+
+            $query_args['meta_query'][] = $price_query;
+        }
+
+        // Ensure meta_query has proper relation
+        if (isset($query_args['meta_query']) && count($query_args['meta_query']) > 1) {
+            $query_args['meta_query']['relation'] = 'AND';
+        }
         
         $query = new WP_Query($query_args);
         $products = array();
@@ -86,24 +169,59 @@ class Woo2Shopify_Selective_Migrator {
                 $query->the_post();
                 $product_id = get_the_ID();
                 $product = wc_get_product($product_id);
-                
+
                 if ($product) {
+                    // Get available languages for this product
+                    $wc_reader = new Woo2Shopify_WooCommerce_Reader();
+                    $product_languages = array();
+                    $available_languages = $wc_reader->get_available_languages();
+
+                    foreach ($available_languages as $lang_code => $lang_name) {
+                        if ($wc_reader->has_translation($product_id, $lang_code)) {
+                            $product_languages[] = $lang_code;
+                        }
+                    }
+
+                    // Get variation count for variable products
+                    $variation_count = 0;
+                    if ($product->get_type() === 'variable') {
+                        $variation_count = count($product->get_children());
+                    }
+
+                    // Get price information
+                    $regular_price = $product->get_regular_price();
+                    $sale_price = $product->get_sale_price();
+                    $price = $product->get_price();
+
                     $products[] = array(
                         'id' => $product_id,
                         'title' => $product->get_name(),
                         'sku' => $product->get_sku(),
-                        'price' => $product->get_price(),
+                        'price' => $price,
+                        'regular_price' => $regular_price,
+                        'sale_price' => $sale_price,
                         'status' => $product->get_status(),
                         'type' => $product->get_type(),
                         'image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
                         'categories' => wp_get_post_terms($product_id, 'product_cat', array('fields' => 'names')),
+                        'tags' => wp_get_post_terms($product_id, 'product_tag', array('fields' => 'names')),
                         'date_created' => $product->get_date_created()->format('Y-m-d H:i:s'),
                         'migrated' => get_post_meta($product_id, '_woo2shopify_migrated', true) === '1',
-                        'shopify_id' => get_post_meta($product_id, '_woo2shopify_shopify_id', true)
+                        'shopify_id' => get_post_meta($product_id, '_woo2shopify_shopify_id', true),
+                        'languages' => $product_languages,
+                        'variation_count' => $variation_count,
+                        'stock_status' => $product->get_stock_status(),
+                        'manage_stock' => $product->get_manage_stock(),
+                        'stock_quantity' => $product->get_stock_quantity()
                     );
                 }
             }
             wp_reset_postdata();
+        }
+
+        // Remove search filter
+        if (!empty($args['search'])) {
+            remove_filter('posts_search', array($this, 'extend_product_search'), 10);
         }
         
         return array(
@@ -111,6 +229,37 @@ class Woo2Shopify_Selective_Migrator {
             'total' => $query->found_posts,
             'has_more' => ($args['offset'] + $args['limit']) < $query->found_posts
         );
+    }
+
+    /**
+     * Extend product search to include SKU and other meta fields
+     */
+    public function extend_product_search($search, $wp_query) {
+        global $wpdb;
+
+        if (empty($search) || !$wp_query->is_main_query()) {
+            return $search;
+        }
+
+        $search_term = $wp_query->get('_search_term');
+        if (empty($search_term)) {
+            return $search;
+        }
+
+        $search_term = $wpdb->esc_like($search_term);
+        $search_term = '%' . $search_term . '%';
+
+        // Add SKU search
+        $sku_search = "OR EXISTS (
+            SELECT 1 FROM {$wpdb->postmeta}
+            WHERE {$wpdb->postmeta}.post_id = {$wpdb->posts}.ID
+            AND {$wpdb->postmeta}.meta_key = '_sku'
+            AND {$wpdb->postmeta}.meta_value LIKE '%s'
+        )";
+
+        $search .= $wpdb->prepare($sku_search, $search_term);
+
+        return $search;
     }
     
     /**

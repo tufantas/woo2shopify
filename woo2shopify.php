@@ -114,6 +114,7 @@ class Woo2Shopify {
             'includes/functions.php', // Load functions first
             'includes/class-woo2shopify-admin.php',
             'includes/class-woo2shopify-shopify-api.php',
+            'includes/class-woo2shopify-langify-api.php',
             'includes/class-woo2shopify-woocommerce-reader.php',
             'includes/class-woo2shopify-data-mapper.php',
             'includes/class-woo2shopify-image-migrator.php',
@@ -129,6 +130,16 @@ class Woo2Shopify {
             $file_path = WOO2SHOPIFY_PLUGIN_DIR . $file;
             if (file_exists($file_path)) {
                 require_once $file_path;
+                error_log('Woo2Shopify: Loaded ' . $file);
+
+                // Special check for functions.php
+                if ($file === 'includes/functions.php') {
+                    if (function_exists('woo2shopify_convert_product_status')) {
+                        error_log('Woo2Shopify: Functions loaded successfully');
+                    } else {
+                        error_log('Woo2Shopify: ERROR - Functions not loaded properly!');
+                    }
+                }
             } else {
                 error_log('Woo2Shopify: Required file not found - ' . $file_path);
             }
@@ -163,14 +174,46 @@ class Woo2Shopify {
         add_action('wp_ajax_woo2shopify_test_product_count', array($this, 'ajax_test_product_count'));
         add_action('wp_ajax_woo2shopify_test_database', array($this, 'ajax_test_database'));
         add_action('wp_ajax_woo2shopify_create_tables', array($this, 'ajax_create_tables'));
+        add_action('wp_ajax_woo2shopify_debug_migration', array($this, 'ajax_debug_migration'));
+        add_action('wp_ajax_woo2shopify_stop_all_tasks', array($this, 'ajax_stop_all_tasks'));
 
         // New selective migration AJAX handlers
         add_action('wp_ajax_woo2shopify_get_products_for_selection', array($this, 'ajax_get_products_for_selection'));
         add_action('wp_ajax_woo2shopify_get_pages_for_selection', array($this, 'ajax_get_pages_for_selection'));
         add_action('wp_ajax_woo2shopify_migrate_selected_products', array($this, 'ajax_migrate_selected_products'));
         add_action('wp_ajax_woo2shopify_migrate_selected_pages', array($this, 'ajax_migrate_selected_pages'));
+
+        // Batch processing trigger (for cron fallback)
+        add_action('wp_ajax_woo2shopify_trigger_batch', array($this, 'ajax_trigger_batch'));
+        add_action('wp_ajax_nopriv_woo2shopify_trigger_batch', array($this, 'ajax_trigger_batch'));
+
+        // Force continue migration
+        add_action('wp_ajax_woo2shopify_force_continue', array($this, 'ajax_force_continue'));
+
+        // Debug migration status
+        add_action('wp_ajax_woo2shopify_debug_status', array($this, 'ajax_debug_status'));
+
+        // Debug migration
+        add_action('wp_ajax_woo2shopify_debug_migration', array($this, 'ajax_debug_migration'));
         add_action('wp_ajax_woo2shopify_start_enhanced_migration', array($this, 'ajax_start_enhanced_migration'));
         add_action('wp_ajax_woo2shopify_get_enhanced_progress', array($this, 'ajax_get_enhanced_progress'));
+
+        // Test batch processing
+        add_action('wp_ajax_woo2shopify_test_batch', array($this, 'ajax_test_batch'));
+
+        // Test batch processing
+        add_action('wp_ajax_woo2shopify_test_batch', array($this, 'ajax_test_batch'));
+
+        // Video migration handlers
+        add_action('wp_ajax_woo2shopify_test_video', array($this, 'ajax_test_video'));
+        add_action('wp_ajax_woo2shopify_migrate_single_video', array($this, 'ajax_migrate_single_video'));
+        add_action('wp_ajax_woo2shopify_clear_video_cache', array($this, 'ajax_clear_video_cache'));
+        add_action('wp_ajax_woo2shopify_reset_video_failures', array($this, 'ajax_reset_video_failures'));
+
+        // Debug handlers
+        add_action('wp_ajax_woo2shopify_get_debug_log', array($this, 'ajax_get_debug_log'));
+        add_action('wp_ajax_woo2shopify_clear_shopify_products', array($this, 'ajax_clear_shopify_products'));
+        add_action('wp_ajax_woo2shopify_debug_languages', array($this, 'ajax_debug_languages'));
 
         // Initialize cron hooks
         add_action('woo2shopify_process_batch', array($this, 'handle_batch_processing'), 10, 2);
@@ -206,8 +249,11 @@ class Woo2Shopify {
                     // Soften MySQL strict mode
                     $wpdb->query("SET SESSION sql_mode = ''");
 
-                    // Optimize query cache
-                    $wpdb->query("SET SESSION query_cache_type = ON");
+                    // Only set query cache if it's available (check first)
+                    $cache_result = $wpdb->get_var("SHOW VARIABLES LIKE 'query_cache_type'");
+                    if ($cache_result && $cache_result !== 'OFF') {
+                        $wpdb->query("SET SESSION query_cache_type = ON");
+                    }
                 } catch (Exception $e) {
                     error_log('Woo2Shopify: MySQL optimization failed - ' . $e->getMessage());
                 }
@@ -400,26 +446,45 @@ class Woo2Shopify {
      * AJAX: Start migration
      */
     public function ajax_start_migration() {
-        check_ajax_referer('woo2shopify_nonce', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
-            return;
-        }
+        // Enhanced error logging
+        woo2shopify_log('AJAX start migration called', 'info');
+        woo2shopify_log('POST data: ' . json_encode($_POST), 'debug');
 
         try {
+            check_ajax_referer('woo2shopify_nonce', 'nonce');
+            woo2shopify_log('Nonce verified successfully', 'info');
+
+            if (!current_user_can('manage_options')) {
+                woo2shopify_log('Insufficient permissions for user: ' . get_current_user_id(), 'error');
+                wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+                return;
+            }
+            woo2shopify_log('Permissions verified for user: ' . get_current_user_id(), 'info');
+
+            // Check if required classes exist
+            if (!class_exists('Woo2Shopify_Batch_Processor')) {
+                error_log('Woo2Shopify: Batch processor class not found');
+                wp_send_json_error(array('message' => 'Batch processor class not found'));
+                return;
+            }
+            error_log('Woo2Shopify: Batch processor class found');
+
             // Get migration options from POST data
             $options = array(
                 'include_images' => isset($_POST['include_images']) ? (bool)$_POST['include_images'] : true,
-                'include_videos' => isset($_POST['include_videos']) ? (bool)$_POST['include_videos'] : true,
+                'include_videos' => false, // Video processing disabled for main migration
                 'include_variations' => isset($_POST['include_variations']) ? (bool)$_POST['include_variations'] : true,
                 'include_categories' => isset($_POST['include_categories']) ? (bool)$_POST['include_categories'] : true,
                 'include_translations' => isset($_POST['include_translations']) ? (bool)$_POST['include_translations'] : true,
                 'batch_size' => isset($_POST['batch_size']) ? intval($_POST['batch_size']) : 3
             );
+            error_log('Woo2Shopify: Options prepared: ' . json_encode($options));
 
             $batch_processor = new Woo2Shopify_Batch_Processor();
+            error_log('Woo2Shopify: Batch processor instantiated');
+
             $result = $batch_processor->start_migration($options);
+            error_log('Woo2Shopify: Migration start result: ' . json_encode($result));
 
             if ($result['success']) {
                 wp_send_json_success($result);
@@ -427,8 +492,26 @@ class Woo2Shopify {
                 wp_send_json_error($result);
             }
         } catch (Exception $e) {
+            error_log('Woo2Shopify: Exception in ajax_start_migration: ' . $e->getMessage());
+            error_log('Woo2Shopify: Exception file: ' . $e->getFile());
+            error_log('Woo2Shopify: Exception line: ' . $e->getLine());
+            error_log('Woo2Shopify: Exception trace: ' . $e->getTraceAsString());
+
             wp_send_json_error(array(
                 'message' => $e->getMessage(),
+                'error_details' => array(
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                )
+            ));
+        } catch (Error $e) {
+            error_log('Woo2Shopify: Fatal error in ajax_start_migration: ' . $e->getMessage());
+            error_log('Woo2Shopify: Fatal error file: ' . $e->getFile());
+            error_log('Woo2Shopify: Fatal error line: ' . $e->getLine());
+
+            wp_send_json_error(array(
+                'message' => 'Fatal error: ' . $e->getMessage(),
                 'error_details' => array(
                     'file' => $e->getFile(),
                     'line' => $e->getLine()
@@ -444,14 +527,35 @@ class Woo2Shopify {
         check_ajax_referer('woo2shopify_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'woo2shopify'));
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
         }
 
         $migration_id = sanitize_text_field($_POST['migration_id'] ?? '');
-        $batch_processor = new Woo2Shopify_Batch_Processor();
-        $progress = $batch_processor->get_progress($migration_id);
 
-        wp_send_json($progress);
+        if (empty($migration_id)) {
+            wp_send_json_error(__('Migration ID required', 'woo2shopify'));
+            return;
+        }
+
+        try {
+            $batch_processor = new Woo2Shopify_Batch_Processor();
+            $progress_result = $batch_processor->get_progress($migration_id);
+
+            // Log for debugging
+            error_log('Woo2Shopify: Progress request for ID: ' . $migration_id);
+            error_log('Woo2Shopify: Progress result: ' . print_r($progress_result, true));
+
+            if ($progress_result['success']) {
+                wp_send_json_success($progress_result['data']);
+            } else {
+                wp_send_json_error($progress_result['message']);
+            }
+
+        } catch (Exception $e) {
+            error_log('Woo2Shopify: Progress error: ' . $e->getMessage());
+            wp_send_json_error(__('Failed to get progress: ', 'woo2shopify') . $e->getMessage());
+        }
     }
 
     /**
@@ -670,8 +774,23 @@ class Woo2Shopify {
             'offset' => intval($_POST['offset'] ?? 0),
             'search' => sanitize_text_field($_POST['search'] ?? ''),
             'category' => intval($_POST['category'] ?? 0),
-            'status' => sanitize_text_field($_POST['status'] ?? 'any')
+            'status' => sanitize_text_field($_POST['status'] ?? 'any'),
+            'product_type' => sanitize_text_field($_POST['product_type'] ?? ''),
+            'migration_status' => sanitize_text_field($_POST['migration_status'] ?? ''),
+            'price_min' => floatval($_POST['price_min'] ?? 0),
+            'price_max' => floatval($_POST['price_max'] ?? 0)
         );
+
+        // Clean up empty values
+        if (empty($args['category'])) {
+            $args['category'] = '';
+        }
+        if (empty($args['price_min'])) {
+            $args['price_min'] = '';
+        }
+        if (empty($args['price_max'])) {
+            $args['price_max'] = '';
+        }
 
         try {
             $selective_migrator = new Woo2Shopify_Selective_Migrator();
@@ -723,7 +842,16 @@ class Woo2Shopify {
             'include_images' => $_POST['include_images'] === 'true',
             'include_videos' => $_POST['include_videos'] === 'true',
             'include_variations' => $_POST['include_variations'] === 'true',
-            'include_categories' => $_POST['include_categories'] === 'true'
+            'include_categories' => $_POST['include_categories'] === 'true',
+            'include_tags' => $_POST['include_tags'] === 'true',
+            'include_translations' => $_POST['include_translations'] === 'true',
+            'include_currencies' => $_POST['include_currencies'] === 'true',
+            'include_seo' => $_POST['include_seo'] === 'true',
+            'include_custom_fields' => $_POST['include_custom_fields'] === 'true',
+            'skip_duplicates' => $_POST['skip_duplicates'] === 'true',
+            'update_existing' => $_POST['update_existing'] === 'true',
+            'selected_languages' => $_POST['selected_languages'] ?? array(),
+            'selected_currencies' => $_POST['selected_currencies'] ?? array()
         );
 
         if (empty($product_ids)) {
@@ -815,6 +943,564 @@ class Woo2Shopify {
             wp_send_json($result);
         } catch (Exception $e) {
             wp_send_json_error(array('message' => $e->getMessage()));
+        }
+    }
+
+    /**
+     * AJAX: Force continue migration
+     */
+    public function ajax_force_continue() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        $migration_id = sanitize_text_field($_POST['migration_id'] ?? '');
+        if (empty($migration_id)) {
+            wp_send_json_error(__('Missing migration ID', 'woo2shopify'));
+            return;
+        }
+
+        error_log('Woo2Shopify: Auto-recovery force continue migration - ID: ' . $migration_id);
+
+        try {
+            // Get migration progress
+            $progress = woo2shopify_get_progress($migration_id);
+            if (!$progress) {
+                wp_send_json_error(__('Migration not found', 'woo2shopify'));
+                return;
+            }
+
+            // Force set status to running if it's stuck
+            if ($progress->status !== 'running') {
+                woo2shopify_update_progress($migration_id, array(
+                    'status' => 'running',
+                    'status_message' => __('Auto-recovered and resumed', 'woo2shopify')
+                ));
+                error_log('Woo2Shopify: Migration status auto-recovered to running');
+            } else {
+                // Update status message even if already running
+                woo2shopify_update_progress($migration_id, array(
+                    'status_message' => __('Auto-recovery triggered - resuming processing', 'woo2shopify')
+                ));
+                error_log('Woo2Shopify: Migration auto-recovery triggered while running');
+            }
+
+            // Clear any stuck video cache that might be causing issues
+            global $wpdb;
+            $video_table = $wpdb->prefix . 'woo2shopify_video_cache';
+            $stuck_videos = $wpdb->query($wpdb->prepare(
+                "UPDATE {$video_table} SET status = 'failed', error_message = 'Auto-recovery: Reset stuck video'
+                 WHERE migration_id = %s AND status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 30 SECOND)",
+                $migration_id
+            ));
+
+            if ($stuck_videos > 0) {
+                error_log("Woo2Shopify: Auto-recovery reset {$stuck_videos} stuck videos");
+            }
+
+            // Trigger batch processing with a small delay to prevent immediate re-trigger
+            $batch_processor = new Woo2Shopify_Batch_Processor();
+            $batch_processor->process_batch($migration_id, $progress->processed_products);
+
+            wp_send_json_success(array(
+                'message' => __('Migration auto-recovered and resumed successfully', 'woo2shopify')
+            ));
+
+        } catch (Exception $e) {
+            error_log('Woo2Shopify: Force continue failed: ' . $e->getMessage());
+            wp_send_json_error(__('Force continue failed: ', 'woo2shopify') . $e->getMessage());
+        }
+    }
+
+    /**
+     * AJAX: Debug migration status
+     */
+    public function ajax_debug_status() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        global $wpdb;
+        $progress_table = $wpdb->prefix . 'woo2shopify_progress';
+
+        // Get all migrations
+        $migrations = $wpdb->get_results("SELECT * FROM {$progress_table} ORDER BY started_at DESC LIMIT 5");
+
+        $debug_info = array();
+        foreach ($migrations as $migration) {
+            $debug_info[] = array(
+                'id' => $migration->migration_id,
+                'status' => $migration->status,
+                'processed' => $migration->processed_products,
+                'total' => $migration->total_products,
+                'started' => $migration->started_at,
+                'completed' => $migration->completed_at,
+                'message' => $migration->status_message
+            );
+        }
+
+        wp_send_json_success($debug_info);
+    }
+
+    /**
+     * AJAX: Trigger batch processing (fallback for cron)
+     */
+    public function ajax_trigger_batch() {
+        // Verify nonce - use the main nonce for simplicity
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'woo2shopify_nonce')) {
+            wp_die('Security check failed');
+        }
+
+        $migration_id = sanitize_text_field($_POST['migration_id'] ?? '');
+        $offset = intval($_POST['offset'] ?? 0);
+        $delay = intval($_POST['delay'] ?? 0);
+
+        if (empty($migration_id)) {
+            wp_die('Missing migration ID');
+        }
+
+        // Add delay if specified
+        if ($delay > 0) {
+            sleep($delay);
+        }
+
+        error_log('Woo2Shopify: AJAX trigger batch - Migration ID: ' . $migration_id . ', Offset: ' . $offset);
+
+        try {
+            // Check if migration is still running
+            $progress = woo2shopify_get_progress($migration_id);
+            if (!$progress || $progress->status !== 'running') {
+                error_log('Woo2Shopify: Migration not running, skipping batch');
+                wp_die('Migration not running');
+            }
+
+            $batch_processor = new Woo2Shopify_Batch_Processor();
+            $batch_processor->process_batch($migration_id, $offset);
+
+            wp_die('Batch processed');
+        } catch (Exception $e) {
+            error_log('Woo2Shopify: AJAX batch processing failed: ' . $e->getMessage());
+            wp_die('Batch processing failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * AJAX: Debug migration status
+     */
+    public function ajax_debug_migration() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'woo2shopify'));
+        }
+
+        global $wpdb;
+
+        $debug_info = array();
+
+        // Get recent migrations
+        $progress_table = $wpdb->prefix . 'woo2shopify_progress';
+        $recent_migrations = $wpdb->get_results(
+            "SELECT * FROM {$progress_table} ORDER BY created_at DESC LIMIT 5"
+        );
+
+        $debug_info['recent_migrations'] = $recent_migrations;
+
+        // Get scheduled cron jobs
+        $cron_jobs = wp_get_scheduled_event('woo2shopify_process_batch');
+        $debug_info['scheduled_cron'] = $cron_jobs;
+
+        // Check if WP Cron is working
+        $debug_info['wp_cron_disabled'] = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+
+        // Get recent logs
+        $logs_table = $wpdb->prefix . 'woo2shopify_logs';
+        $recent_logs = $wpdb->get_results(
+            "SELECT * FROM {$logs_table} ORDER BY created_at DESC LIMIT 10"
+        );
+
+        $debug_info['recent_logs'] = $recent_logs;
+
+        // Check Shopify connection
+        try {
+            $shopify_api = new Woo2Shopify_Shopify_API();
+            $connection_test = $shopify_api->test_connection();
+            $debug_info['shopify_connection'] = $connection_test;
+        } catch (Exception $e) {
+            $debug_info['shopify_connection'] = array(
+                'success' => false,
+                'error' => $e->getMessage()
+            );
+        }
+
+        // Get product count
+        $wc_reader = new Woo2Shopify_WooCommerce_Reader();
+        $debug_info['product_count'] = $wc_reader->get_product_count();
+
+        wp_send_json_success($debug_info);
+    }
+
+    /**
+     * AJAX: Stop all background tasks
+     */
+    public function ajax_stop_all_tasks() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        try {
+            // Get current running tasks before stopping
+            $running_tasks = woo2shopify_get_running_tasks();
+
+            // Stop all tasks
+            $result = woo2shopify_stop_all_tasks();
+
+            // Also clear any stuck migrations
+            global $wpdb;
+            $progress_table = $wpdb->prefix . 'woo2shopify_progress';
+            $stuck_migrations = $wpdb->query("UPDATE {$progress_table} SET status = 'stopped' WHERE status = 'running'");
+
+            error_log('Woo2Shopify: All tasks stopped and ' . $stuck_migrations . ' stuck migrations cleared');
+
+            wp_send_json_success(array(
+                'message' => 'All background tasks stopped successfully',
+                'stopped_migrations' => count($running_tasks['migrations']),
+                'stuck_migrations_cleared' => $stuck_migrations,
+                'wp_cron_status' => $running_tasks['wp_cron'],
+                'action_scheduler_jobs' => $running_tasks['action_scheduler'] ?? 0
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => 'Failed to stop tasks: ' . $e->getMessage()
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Clear Shopify products (for testing)
+     */
+    public function ajax_clear_shopify_products() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        try {
+            $shopify_api = new Woo2Shopify_Shopify_API();
+
+            // Get all products
+            $products = $shopify_api->get_products();
+            $deleted_count = 0;
+
+            if ($products && isset($products['products'])) {
+                foreach ($products['products'] as $product) {
+                    $result = $shopify_api->delete_product($product['id']);
+                    if ($result) {
+                        $deleted_count++;
+                    }
+                    // Small delay to avoid rate limiting
+                    usleep(500000); // 0.5 seconds
+                }
+            }
+
+            wp_send_json_success(array(
+                'message' => "Deleted {$deleted_count} products from Shopify",
+                'deleted_count' => $deleted_count
+            ));
+
+        } catch (Exception $e) {
+            error_log('Woo2Shopify: Clear Shopify products error: ' . $e->getMessage());
+            wp_send_json_error(array(
+                'message' => 'Failed to clear products: ' . $e->getMessage()
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Debug language settings
+     */
+    public function ajax_debug_languages() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        $debug_info = array();
+
+        // WPML Debug
+        if (function_exists('icl_get_default_language')) {
+            global $sitepress;
+            $debug_info['wpml'] = array(
+                'active' => true,
+                'default_language' => icl_get_default_language(),
+                'current_language' => $sitepress ? $sitepress->get_current_language() : 'N/A',
+                'active_languages' => $sitepress ? $sitepress->get_active_languages() : array()
+            );
+        } else {
+            $debug_info['wpml'] = array('active' => false);
+        }
+
+        // Polylang Debug
+        if (function_exists('pll_default_language')) {
+            $debug_info['polylang'] = array(
+                'active' => true,
+                'default_language' => pll_default_language(),
+                'current_language' => pll_current_language(),
+                'languages' => pll_languages_list()
+            );
+        } else {
+            $debug_info['polylang'] = array('active' => false);
+        }
+
+        // WPML Database Debug
+        if (function_exists('icl_get_default_language')) {
+            global $wpdb;
+            $default_lang = icl_get_default_language();
+
+            // Check WPML translations table
+            $wpml_products = $wpdb->get_results($wpdb->prepare(
+                "SELECT element_id, language_code, source_language_code
+                 FROM {$wpdb->prefix}icl_translations
+                 WHERE element_type = 'post_product'
+                 AND element_id IN (27136, 48210, 48250)
+                 ORDER BY element_id, language_code"
+            ));
+
+            $debug_info['wpml_database'] = $wpml_products;
+        }
+
+        // Sample products debug
+        $wc_reader = new Woo2Shopify_WooCommerce_Reader();
+        $sample_products = $wc_reader->get_products(array('limit' => 5));
+
+        $debug_info['sample_products'] = array();
+        foreach ($sample_products as $product) {
+            $debug_info['sample_products'][] = array(
+                'id' => $product['id'],
+                'name' => $product['name'],
+                'translations' => array_keys($product['translations'] ?? array())
+            );
+        }
+
+        wp_send_json_success($debug_info);
+    }
+
+    /**
+     * AJAX: Test batch processing
+     */
+    public function ajax_test_batch() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        try {
+            $debug_info = array();
+
+            // Test 1: Check if functions exist
+            $debug_info['functions_exist'] = array(
+                'woo2shopify_get_progress' => function_exists('woo2shopify_get_progress'),
+                'woo2shopify_update_progress' => function_exists('woo2shopify_update_progress'),
+                'woo2shopify_generate_migration_id' => function_exists('woo2shopify_generate_migration_id')
+            );
+
+            // Test 2: Check database tables
+            global $wpdb;
+            $progress_table = $wpdb->prefix . 'woo2shopify_progress';
+            $debug_info['table_exists'] = $wpdb->get_var("SHOW TABLES LIKE '$progress_table'") == $progress_table;
+
+            // Test 3: Check WP Cron
+            $debug_info['wp_cron_enabled'] = !defined('DISABLE_WP_CRON') || !DISABLE_WP_CRON;
+
+            // Test 4: Try to create a test migration record
+            if ($debug_info['table_exists'] && $debug_info['functions_exist']['woo2shopify_generate_migration_id']) {
+                $test_migration_id = woo2shopify_generate_migration_id();
+                $insert_result = woo2shopify_update_progress($test_migration_id, array(
+                    'total_products' => 1,
+                    'processed_products' => 0,
+                    'status' => 'test'
+                ));
+                $debug_info['test_insert'] = $insert_result !== false;
+
+                // Clean up test record
+                if ($insert_result) {
+                    $wpdb->delete($progress_table, array('migration_id' => $test_migration_id));
+                }
+            }
+
+            // Test 5: Check class loading
+            $debug_info['classes_exist'] = array(
+                'Woo2Shopify_Batch_Processor' => class_exists('Woo2Shopify_Batch_Processor'),
+                'Woo2Shopify_Shopify_API' => class_exists('Woo2Shopify_Shopify_API'),
+                'Woo2Shopify_WooCommerce_Reader' => class_exists('Woo2Shopify_WooCommerce_Reader')
+            );
+
+            wp_send_json_success($debug_info);
+
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ));
+        }
+    }
+
+    /**
+     * Test video AJAX handler
+     */
+    public function ajax_test_video() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        $video_url = sanitize_url($_POST['video_url']);
+
+        if (empty($video_url)) {
+            wp_send_json_error(array('message' => 'Video URL is required'));
+        }
+
+        try {
+            // Test if video URL is accessible
+            $response = wp_remote_head($video_url, array(
+                'timeout' => 10,
+                'user-agent' => 'Woo2Shopify Video Tester'
+            ));
+
+            if (is_wp_error($response)) {
+                wp_send_json_error(array('message' => 'Cannot access video: ' . $response->get_error_message()));
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            if ($response_code !== 200) {
+                wp_send_json_error(array('message' => 'Video not accessible (HTTP ' . $response_code . ')'));
+            }
+
+            wp_send_json_success(array('message' => 'Video is accessible'));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array('message' => 'Error testing video: ' . $e->getMessage()));
+        }
+    }
+
+    /**
+     * Migrate single video AJAX handler
+     */
+    public function ajax_migrate_single_video() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        $video_url = sanitize_url($_POST['video_url']);
+        $product_id = intval($_POST['product_id']);
+
+        if (empty($video_url) || empty($product_id)) {
+            wp_send_json_error(array('message' => 'Video URL and Product ID are required'));
+        }
+
+        try {
+            // Get Shopify product ID for this WooCommerce product
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'woo2shopify_products';
+
+            $shopify_product_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT shopify_product_id FROM $table_name WHERE wc_product_id = %d AND status = 'completed'",
+                $product_id
+            ));
+
+            if (!$shopify_product_id) {
+                wp_send_json_error(array('message' => 'Product not found in Shopify or not migrated yet'));
+            }
+
+            // Process video with timeout protection
+            $video_result = woo2shopify_safe_video_process($video_url, $shopify_product_id, 20);
+
+            if (is_wp_error($video_result)) {
+                wp_send_json_error(array('message' => $video_result->get_error_message()));
+            }
+
+            wp_send_json_success(array(
+                'message' => 'Video migrated successfully',
+                'video_id' => $video_result
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array('message' => 'Error migrating video: ' . $e->getMessage()));
+        }
+    }
+
+    /**
+     * Clear video cache AJAX handler
+     */
+    public function ajax_clear_video_cache() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        try {
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'woo2shopify_video_cache';
+
+            $deleted = $wpdb->query("DELETE FROM $table_name");
+
+            wp_send_json_success(array(
+                'message' => sprintf('Cleared %d video cache entries', $deleted)
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array('message' => 'Error clearing video cache: ' . $e->getMessage()));
+        }
+    }
+
+    /**
+     * Reset video failures AJAX handler
+     */
+    public function ajax_reset_video_failures() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        try {
+            // Reset video failure counters
+            delete_option('woo2shopify_video_failures');
+            delete_option('woo2shopify_disable_videos');
+
+            // Clear stuck videos
+            woo2shopify_clear_stuck_videos();
+
+            wp_send_json_success(array(
+                'message' => 'Video failures reset successfully. Video processing is now enabled.'
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array('message' => 'Error resetting video failures: ' . $e->getMessage()));
+        }
+    }
+
+    /**
+     * Get debug log AJAX handler
+     */
+    public function ajax_get_debug_log() {
+        check_ajax_referer('woo2shopify_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('Insufficient permissions', 'woo2shopify'));
+            return;
+        }
+
+        try {
+            $log_content = woo2shopify_get_debug_log(50);
+            wp_send_json_success(array('log' => $log_content));
+        } catch (Exception $e) {
+            wp_send_json_error(array('message' => 'Error getting debug log: ' . $e->getMessage()));
         }
     }
 }

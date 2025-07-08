@@ -15,7 +15,7 @@ class Woo2Shopify_WooCommerce_Reader {
      */
     public function get_products($args = array()) {
         $defaults = array(
-            'status' => array('publish', 'draft', 'private'),
+            'status' => array('publish'), // Only get published products
             'limit' => -1,
             'offset' => 0,
             'orderby' => 'ID',
@@ -24,22 +24,185 @@ class Woo2Shopify_WooCommerce_Reader {
             'meta_query' => array(),
             'date_query' => array()
         );
-        
+
         $args = wp_parse_args($args, $defaults);
-        
-        $products = wc_get_products($args);
-        $product_data = array();
-        
-        foreach ($products as $product) {
-            $product_info = $this->get_product_data($product);
-            if ($product_info) {
-                $product_data[] = $product_info;
+
+        // Force WPML to return only default language products
+        if (function_exists('icl_get_default_language')) {
+            global $sitepress;
+            if ($sitepress) {
+                $current_lang = $sitepress->get_current_language();
+                $default_lang = icl_get_default_language();
+                error_log('Woo2Shopify: WPML detected - Current: ' . $current_lang . ', Default: ' . $default_lang);
+                $sitepress->switch_lang($default_lang);
+                error_log('Woo2Shopify: Switched to default language: ' . $default_lang);
+
+                // Add WPML meta query to ensure only default language products
+                $args['meta_query'][] = array(
+                    'key' => 'icl_lang_code',
+                    'value' => $default_lang,
+                    'compare' => '='
+                );
+                error_log('Woo2Shopify: Added WPML meta query for default language');
+            } else {
+                error_log('Woo2Shopify: WPML function exists but $sitepress not available');
+            }
+        } else {
+            error_log('Woo2Shopify: WPML not detected, checking for other multilingual plugins...');
+
+            // Check for Polylang
+            if (function_exists('pll_default_language')) {
+                $default_lang = pll_default_language();
+                error_log('Woo2Shopify: Polylang detected - Default language: ' . $default_lang);
+
+                // Add Polylang meta query
+                $args['meta_query'][] = array(
+                    'key' => 'pll_language',
+                    'value' => $default_lang,
+                    'compare' => '='
+                );
+            } else {
+                error_log('Woo2Shopify: No multilingual plugin detected');
             }
         }
-        
+
+        // Alternative approach: Get product IDs directly from database with language filtering
+        $product_ids = $this->get_default_language_product_ids($args);
+        error_log('Woo2Shopify: Found ' . count($product_ids) . ' default language product IDs');
+
+        // Get products by IDs to ensure we only get default language products
+        $products = array();
+        foreach ($product_ids as $product_id) {
+            $product = wc_get_product($product_id);
+            if ($product && $product->get_status() === 'publish') {
+                $products[] = $product;
+            }
+        }
+
+        error_log('Woo2Shopify: Loaded ' . count($products) . ' published products');
+
+        $product_data = array();
+        $processed_count = 0;
+        $skipped_count = 0;
+
+        foreach ($products as $product) {
+            $product_id = $product->get_id();
+            $product_title = $product->get_name();
+
+            error_log("Woo2Shopify: Checking product {$product_id} - '{$product_title}'");
+
+            // Double-check: Only process default language products
+            if (!$this->is_default_language_product($product_id)) {
+                $skipped_count++;
+                error_log("Woo2Shopify: SKIPPED non-default language product {$product_id} - '{$product_title}'");
+                continue;
+            }
+
+            error_log("Woo2Shopify: PROCESSING default language product {$product_id} - '{$product_title}'");
+
+            $product_info = $this->get_product_data($product);
+            if ($product_info) {
+                // Add translations from other languages
+                $product_info['translations'] = $this->get_product_translations($product->get_id());
+                $product_data[] = $product_info;
+                $processed_count++;
+            }
+        }
+
+        // Restore original language
+        if (function_exists('icl_get_default_language') && isset($current_lang)) {
+            global $sitepress;
+            if ($sitepress) {
+                $sitepress->switch_lang($current_lang);
+            }
+        }
+
+        error_log("Woo2Shopify: Processed {$processed_count} products, skipped {$skipped_count} duplicates");
+
         return $product_data;
     }
-    
+
+    /**
+     * Get default language product IDs using direct SQL query
+     */
+    private function get_default_language_product_ids($args) {
+        global $wpdb;
+
+        $limit = isset($args['limit']) && $args['limit'] > 0 ? $args['limit'] : 999999;
+        $offset = isset($args['offset']) ? $args['offset'] : 0;
+
+        // Base query for published products
+        $sql = "SELECT DISTINCT p.ID
+                FROM {$wpdb->posts} p
+                WHERE p.post_type = 'product'
+                AND p.post_status = 'publish'";
+
+        // Add WPML filtering if available
+        if (function_exists('icl_get_default_language')) {
+            $default_lang = icl_get_default_language();
+            $sql .= " AND p.ID IN (
+                SELECT element_id
+                FROM {$wpdb->prefix}icl_translations
+                WHERE element_type = 'post_product'
+                AND language_code = '{$default_lang}'
+                AND source_language_code IS NULL
+            )";
+            error_log('Woo2Shopify: Using WPML SQL filter for default language: ' . $default_lang);
+        }
+        // Add Polylang filtering if available
+        elseif (function_exists('pll_default_language')) {
+            $default_lang = pll_default_language();
+            $sql .= " AND p.ID IN (
+                SELECT object_id
+                FROM {$wpdb->term_relationships} tr
+                JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+                JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
+                WHERE tt.taxonomy = 'language'
+                AND t.slug = '{$default_lang}'
+            )";
+            error_log('Woo2Shopify: Using Polylang SQL filter for language: ' . $default_lang);
+        }
+
+        $sql .= " ORDER BY p.ID ASC LIMIT {$limit} OFFSET {$offset}";
+
+        error_log('Woo2Shopify: SQL Query: ' . $sql);
+
+        $product_ids = $wpdb->get_col($sql);
+
+        return array_map('intval', $product_ids);
+    }
+
+    /**
+     * Check if product is in default language
+     */
+    private function is_default_language_product($product_id) {
+        // WPML support
+        if (function_exists('icl_get_default_language')) {
+            $default_lang = icl_get_default_language();
+            $product_lang = apply_filters('wpml_element_language_code', null, array(
+                'element_id' => $product_id,
+                'element_type' => 'post_product'
+            ));
+
+            $is_default = $product_lang === $default_lang || $product_lang === null;
+            error_log("Woo2Shopify: Product {$product_id} - Lang: {$product_lang}, Default: {$default_lang}, IsDefault: " . ($is_default ? 'YES' : 'NO'));
+            return $is_default;
+        }
+
+        // Polylang support
+        if (function_exists('pll_default_language')) {
+            $default_lang = pll_default_language();
+            $product_lang = pll_get_post_language($product_id);
+
+            $is_default = $product_lang === $default_lang || $product_lang === null;
+            error_log("Woo2Shopify: Product {$product_id} - Lang: {$product_lang}, Default: {$default_lang}, IsDefault: " . ($is_default ? 'YES' : 'NO'));
+            return $is_default;
+        }
+
+        // No multilingual plugin, return true
+        return true;
+    }
+
     /**
      * Get single product data
      */
@@ -458,7 +621,7 @@ class Woo2Shopify_WooCommerce_Reader {
      */
     public function get_product_count($args = array()) {
         $defaults = array(
-            'status' => array('publish', 'draft', 'private'),
+            'status' => array('publish'), // Only count published products
             'return' => 'ids',
             'limit' => -1  // Get all products for counting
         );
@@ -470,16 +633,60 @@ class Woo2Shopify_WooCommerce_Reader {
 
         $statuses = "'" . implode("','", array_map('esc_sql', $args['status'])) . "'";
 
+        // Handle multilingual sites (WPML/Polylang)
+        $multilingual_join = '';
+        $multilingual_where = '';
+
+        // WPML support
+        if (function_exists('icl_get_default_language')) {
+            $default_lang = icl_get_default_language();
+            $multilingual_join = "LEFT JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id AND t.element_type = 'post_product'";
+            $multilingual_where = "AND (t.language_code = '$default_lang' OR t.language_code IS NULL)";
+        }
+        // Polylang support
+        elseif (function_exists('pll_default_language')) {
+            $default_lang = pll_default_language();
+            $multilingual_join = "LEFT JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+                                 LEFT JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'language'
+                                 LEFT JOIN {$wpdb->terms} t ON tt.term_id = t.term_id";
+            $multilingual_where = "AND (t.slug = '$default_lang' OR t.slug IS NULL)";
+        }
+
         $query = "
             SELECT COUNT(DISTINCT p.ID)
             FROM {$wpdb->posts} p
+            {$multilingual_join}
             WHERE p.post_type = 'product'
             AND p.post_status IN ({$statuses})
+            {$multilingual_where}
         ";
+
+        // Debug: Let's also see what products we're counting
+        $debug_query = "
+            SELECT p.ID, p.post_title, p.post_status, p.post_type
+            FROM {$wpdb->posts} p
+            WHERE p.post_type = 'product'
+            AND p.post_status IN ({$statuses})
+            ORDER BY p.ID
+        ";
+        $debug_products = $wpdb->get_results($debug_query);
+        error_log('Woo2Shopify: Found products: ' . json_encode(array_map(function($p) {
+            return array('ID' => $p->ID, 'title' => $p->post_title, 'status' => $p->post_status);
+        }, array_slice($debug_products, 0, 10))));
 
         $count = $wpdb->get_var($query);
 
+        // Debug: Let's see what we're actually counting
+        error_log('Woo2Shopify: Product count query: ' . $query);
         error_log('Woo2Shopify: Product count query result: ' . $count);
+
+        // Debug: Let's also check with WooCommerce function
+        $wc_count = count(wc_get_products(array(
+            'status' => 'publish',
+            'return' => 'ids',
+            'limit' => -1
+        )));
+        error_log('Woo2Shopify: WooCommerce published product count: ' . $wc_count);
 
         // Fallback: Use WooCommerce function if direct query fails
         if ($count === null || $count === false) {
@@ -683,9 +890,9 @@ class Woo2Shopify_WooCommerce_Reader {
             foreach ($wpml_languages as $lang_code => $language) {
                 $languages[$lang_code] = array(
                     'code' => $lang_code,
-                    'name' => $language['native_name'],
-                    'english_name' => $language['english_name'],
-                    'is_default' => $language['default_locale'] == get_locale(),
+                    'name' => isset($language['native_name']) ? $language['native_name'] : $lang_code,
+                    'english_name' => isset($language['english_name']) ? $language['english_name'] : $lang_code,
+                    'is_default' => isset($language['default_locale']) ? ($language['default_locale'] == get_locale()) : false,
                     'plugin' => 'WPML'
                 );
             }

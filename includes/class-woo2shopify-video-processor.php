@@ -376,22 +376,40 @@ class Woo2Shopify_Video_Processor {
      */
     public function get_video_cache_stats() {
         $cached_videos = get_option('woo2shopify_cached_videos', array());
-        
+
         $stats = array(
             'total_videos' => count($cached_videos),
             'migrated_videos' => 0,
             'pending_videos' => 0,
+            'failed_videos' => 0,
+            'stuck_videos' => 0,
             'total_size' => 0
         );
-        
+
+        $current_time = current_time('timestamp');
+
         foreach ($cached_videos as $video_data) {
-            if ($video_data['migrated']) {
+            if (isset($video_data['migrated']) && $video_data['migrated']) {
                 $stats['migrated_videos']++;
+            } elseif (isset($video_data['failed']) && $video_data['failed']) {
+                $stats['failed_videos']++;
+            } elseif (isset($video_data['pending']) && $video_data['pending']) {
+                // Check if video is stuck (pending for more than 5 minutes)
+                if (isset($video_data['started_at'])) {
+                    $started_time = strtotime($video_data['started_at']);
+                    if (($current_time - $started_time) > 300) { // 5 minutes
+                        $stats['stuck_videos']++;
+                    } else {
+                        $stats['pending_videos']++;
+                    }
+                } else {
+                    $stats['pending_videos']++;
+                }
             } else {
                 $stats['pending_videos']++;
             }
         }
-        
+
         return $stats;
     }
     
@@ -400,5 +418,43 @@ class Woo2Shopify_Video_Processor {
      */
     public function clear_video_cache() {
         return delete_option('woo2shopify_cached_videos');
+    }
+
+    /**
+     * Clear stuck videos from cache
+     */
+    public function clear_stuck_videos() {
+        $cached_videos = get_option('woo2shopify_cached_videos', array());
+        $current_time = current_time('timestamp');
+        $cleared_count = 0;
+
+        foreach ($cached_videos as $video_hash => $video_data) {
+            // Clear videos that are pending for more than 5 minutes
+            if (isset($video_data['pending']) && $video_data['pending'] && isset($video_data['started_at'])) {
+                $started_time = strtotime($video_data['started_at']);
+                if (($current_time - $started_time) > 300) { // 5 minutes
+                    unset($cached_videos[$video_hash]);
+                    $cleared_count++;
+                    error_log('Woo2Shopify: Cleared stuck video: ' . $video_data['url']);
+                }
+            }
+
+            // Clear failed videos older than 1 hour
+            if (isset($video_data['failed']) && $video_data['failed'] && isset($video_data['failed_at'])) {
+                $failed_time = strtotime($video_data['failed_at']);
+                if (($current_time - $failed_time) > 3600) { // 1 hour
+                    unset($cached_videos[$video_hash]);
+                    $cleared_count++;
+                    error_log('Woo2Shopify: Cleared old failed video: ' . $video_data['url']);
+                }
+            }
+        }
+
+        if ($cleared_count > 0) {
+            update_option('woo2shopify_cached_videos', $cached_videos);
+            error_log('Woo2Shopify: Cleared ' . $cleared_count . ' stuck/failed videos from cache');
+        }
+
+        return $cleared_count;
     }
 }
