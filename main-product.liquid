@@ -1,0 +1,2326 @@
+<!-- Woo2Shopify Translation Variables -->
+{% assign current_locale = request.locale.iso_code %}
+{% assign translated_title = product.title %}
+{% assign translated_description = product.description %}
+{% assign translated_short_description = '' %}
+
+{% comment %} Debug current locale {% endcomment %}
+{% assign debug_locale = current_locale | default: 'UNDEFINED' %}
+
+{% comment %} Force check URL for language {% endcomment %}
+{% if request.path contains '/tr/' %}
+  {% assign current_locale = 'tr' %}
+{% elsif request.path contains '/de/' %}
+  {% assign current_locale = 'de' %}
+{% elsif request.path contains '/en/' %}
+  {% assign current_locale = 'en' %}
+{% endif %}
+
+{% case current_locale %}
+  {% when 'tr' %}
+    {% if product.metafields.custom.title_tr != blank %}
+      {% assign translated_title = product.metafields.custom.title_tr %}
+    {% endif %}
+    {% if product.metafields.custom.description_tr != blank %}
+      {% assign translated_description = product.metafields.custom.description_tr %}
+    {% endif %}
+    {% if product.metafields.custom.short_description_tr != blank %}
+      {% assign translated_short_description = product.metafields.custom.short_description_tr %}
+    {% endif %}
+  {% when 'de' %}
+    {% if product.metafields.custom.title_de != blank %}
+      {% assign translated_title = product.metafields.custom.title_de %}
+    {% endif %}
+    {% if product.metafields.custom.description_de != blank %}
+      {% assign translated_description = product.metafields.custom.description_de %}
+    {% endif %}
+    {% if product.metafields.custom.short_description_de != blank %}
+      {% assign translated_short_description = product.metafields.custom.short_description_de %}
+    {% endif %}
+{% endcase %}
+<!-- Translation Variables End -->
+{{ 'product.css' | asset_url | stylesheet_tag }}
+{{ 'collection-sidebar.css' | asset_url | stylesheet_tag }}
+{%- include 'section_style' -%}
+{%- assign current_variant = product.selected_or_first_available_variant -%}
+{%- assign first_3d_model = product.media | where: "media_type", "model" | first -%}
+{%- assign pro_color_label = settings.product_cart_swatch_label | split: ',' -%}
+{%- if settings.crop -%}
+    {%- assign image_crop = 'center' -%}
+{%- endif -%}
+{%- if section.settings.recommend_product -%}
+    {%- assign col_style = "col-lg-5" -%}
+    {%- assign cols_style = "col-lg-4" -%}
+    {%- assign cols1_style = "col-lg-3" -%}
+{%- else  -%}
+    {%- assign col_style = "col-lg-7" -%}
+    {%- assign cols_style = "col-lg-5" -%}
+{%- endif -%}
+{%- case section.settings.media_layout -%}
+    {% when 'stacked' %}
+        {%- assign stacked_layout = 'true' -%}
+    {% when 'grid' %}
+        {%- assign stacked_layout = 'true' -%}
+    {% when 'masonry' %}
+        {%- assign stacked_layout = 'true' -%}
+    {% else %}
+        {%- assign stacked_layout = 'false' -%}
+{%- endcase -%}
+
+<div class="vela-section product-page{% unless section.settings.product_sticky %} overflow-hidden{% endunless %}{% if section.settings.full_with and section.settings.max_with %} mx-auto{% endif %}" style="{{- section_style -}}">
+    <div class="container{% if section.settings.full_with %}-fluid{% endif %}">
+        <div
+            class="product"
+            data-section-id="{{ section.id }}"
+            data-section-type="product-template"
+            data-image-zoom-type="{{ section.settings.enable_image_popup }}"
+            data-multi-variant-image ="{{ section.settings.enable_multi_variant }}"
+            data-enable-history-state="true"
+            data-stacked-layout="{{ stacked_layout }}"
+            {% if first_3d_model %}data-has-model="true"{% endif %}
+        >
+            <div class="product-single product__primary">
+                <div class="row g-4 g-xl-5 product__row">
+                    <div class="col-12 {{ col_style }} product__media-wrapper position-relative">
+                        {% include 'product-media' %}
+                    </div>
+                    <div class="col-12 {{cols_style}} product__info-wrapper ps-xl-4">
+  <!-- Woo2Shopify Translation Status (Debug Mode) -->
+  <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; margin: 15px 0; font-family: monospace; font-size: 12px; border-radius: 4px;">
+    <h4 style="margin-top: 0; color: #155724;">🔍 Woo2Shopify Debug Information</h4>
+
+    <div style="margin-bottom: 10px;">
+      <strong>Current Language:</strong> <code>{{ current_locale | upcase }}</code> |
+      <strong>Debug Locale:</strong> <code>{{ debug_locale | upcase }}</code> |
+      <strong>URL:</strong> <code>{{ request.path }}</code>
+    </div>
+
+    <div style="background: #f8f9fa; padding: 10px; border-radius: 3px; margin-bottom: 10px;">
+      <strong>Translation Variables:</strong><br>
+      translated_title: <code>{{ translated_title | truncate: 100 }}</code><br>
+      translated_description: <code>{{ translated_description | truncate: 100 }}</code><br>
+      product.title: <code>{{ product.title | truncate: 100 }}</code><br>
+      product.description: <code>{{ product.description | truncate: 100 }}</code>
+    </div>
+
+    <div style="background: #f8f9fa; padding: 10px; border-radius: 3px; margin-bottom: 10px;">
+      <strong>Metafields Check:</strong><br>
+      title_tr: <code>{{ product.metafields.custom.title_tr | default: "❌ NOT FOUND" | truncate: 50 }}</code><br>
+      description_tr: <code>{{ product.metafields.custom.description_tr | default: "❌ NOT FOUND" | truncate: 50 }}</code><br>
+      title_de: <code>{{ product.metafields.custom.title_de | default: "❌ NOT FOUND" | truncate: 50 }}</code><br>
+      description_de: <code>{{ product.metafields.custom.description_de | default: "❌ NOT FOUND" | truncate: 50 }}</code>
+    </div>
+
+    <div style="background: #e9ecef; padding: 10px; border-radius: 3px;">
+      <strong>Status:</strong><br>
+      ✅ Title: {% if translated_title != product.title %}<span style="color: #28a745;">TRANSLATED</span>{% else %}<span style="color: #6c757d;">DEFAULT</span>{% endif %}<br>
+      ✅ Description: {% if translated_description != product.description %}<span style="color: #28a745;">TRANSLATED</span>{% else %}<span style="color: #dc3545;">DEFAULT (PROBLEM!)</span>{% endif %}
+    </div>
+  </div>
+
+    
+
+
+                        {% include 'product-information', translated_title: translated_title, translated_description: translated_description, translated_short_description: translated_short_description %}
+
+                        <!-- Woo2Shopify: Force Translation Script -->
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            // Translation data
+                            const translations = {
+                                title: {{ translated_title | json }},
+                                description: {{ translated_description | json }},
+                                original_title: {{ product.title | json }},
+                                original_description: {{ product.description | json }},
+                                locale: {{ request.locale.iso_code | json }}
+                            };
+
+                            console.log('🌍 Woo2Shopify Force Translation:', translations);
+
+                            function forceTranslateDescription() {
+                                if (!translations.description || translations.description === translations.original_description) {
+                                    return; // No translation needed
+                                }
+
+                                // Find all possible description containers
+                                const selectors = [
+                                    '.rte',
+                                    '.product-description',
+                                    '.tab-pane .rte',
+                                    '[role="tabpanel"] .rte',
+                                    '.product-tabs .rte',
+                                    '.accordion-body .rte'
+                                ];
+
+                                let updated = 0;
+
+                                selectors.forEach(selector => {
+                                    document.querySelectorAll(selector).forEach(element => {
+                                        const text = element.textContent.trim();
+                                        const originalText = translations.original_description.replace(/<[^>]*>/g, '').trim();
+
+                                        // Check if this element contains the original description
+                                        if (text.includes(originalText.substring(0, 100)) ||
+                                            element.innerHTML.includes(originalText.substring(0, 100))) {
+                                            element.innerHTML = translations.description;
+                                            element.style.borderLeft = '3px solid #28a745';
+                                            element.style.paddingLeft = '10px';
+                                            updated++;
+                                            console.log('✅ Force updated:', selector, element);
+                                        }
+                                    });
+                                });
+
+                                console.log(`🎯 Force translation updated ${updated} elements`);
+                                return updated;
+                            }
+
+                            // Run immediately
+                            setTimeout(forceTranslateDescription, 100);
+
+                            // Run again after tab clicks
+                            document.addEventListener('click', function(e) {
+                                if (e.target.matches('[data-bs-toggle="tab"], .nav-link, .accordion-button')) {
+                                    setTimeout(forceTranslateDescription, 200);
+                                }
+                            });
+
+                            // Run periodically for dynamic content
+                            setInterval(forceTranslateDescription, 2000);
+                        });
+                        </script>
+
+                        <!-- Woo2Shopify: Translation Support Styles (Optional) -->
+                        {% comment %}
+                        <style>
+                        /* Woo2Shopify translation indicator */
+                        .woo2shopify-translated {
+                            position: relative;
+                        }
+
+                        .woo2shopify-translated::before {
+                            content: "🌍";
+                            position: absolute;
+                            top: -5px;
+                            right: -5px;
+                            font-size: 12px;
+                            opacity: 0.7;
+                        }
+                        </style>
+                        {% endcomment %}
+                    </div>
+                    {%- if section.settings.recommend_product -%}
+                        <div class="d-none d-lg-block {{ cols1_style }} product__sidebar-wrapper ps-xl-4">
+                            <product-recommendations-sidebar class="product-recommendations__sidebar" data-url="{{ routes.product_recommendations_url }}?section_id={{ section.id }}&product_id={{ product.id }}&limit={{ section.settings.products_to_show }}">
+                                {% if recommendations.performed and recommendations.products_count > 0 %}
+                                    <div class="product-recommendations__inner vela-section overflow-hidden">
+                                        {%- if section.settings.recommend_product_title != blank -%}
+                                            <h3 class="heading mb-4">
+                                                <span>{{ section.settings.recommend_product_title }}</span>
+                                            </h3>
+                                        {%- endif -%}
+                                        <div class="product-recommendations__content">
+                                            {% comment %} LAYOUT: Grid {% endcomment %}
+                                            <div class="row g-3">
+                                                {%- for product in recommendations.products -%}
+                                                    <div class="col-12">
+                                                        {% render 'product-single-list-style', product: product, showReview: section.settings.show_review %}
+                                                    </div>
+                                                {%- endfor -%}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </product-recommendations-sidebar>
+                            <style>
+                                .product-recommendations__sidebar .product-card__image-wrapper {width: 100px;}.product-recommendations__sidebar .product-price {font-size: 16px;}
+                            </style>
+                            <script>
+                                class ProductRecommendationsSidebar extends HTMLElement {
+                                    constructor() {
+                                        super();
+                                        const handleIntersection = (entries, observer) => {
+                                            if (!entries[0].isIntersecting) return;
+                                            observer.unobserve(this);
+                                            fetch(this.dataset.url)
+                                            .then(response => response.text())
+                                            .then(text => {
+                                                const html = document.createElement('div');
+                                                html.innerHTML = text;
+                                                const recommendations = html.querySelector('product-recommendations-sidebar');
+                                                if (recommendations && recommendations.innerHTML.trim().length) {
+                                                    this.innerHTML = recommendations.innerHTML;
+                                                }
+                                            })
+                                            .catch(e => {
+                                                console.error(e);
+                                            });
+                                        }
+                                    
+                                        new IntersectionObserver(handleIntersection.bind(this), {rootMargin: '0px 0px 200px 0px'}).observe(this);
+                                    }
+                                }
+                                customElements.define('product-recommendations-sidebar', ProductRecommendationsSidebar);
+                            </script>
+                        </div>
+                    {%- endif -%}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="JsQty"></div>
+<div id="CartTemplate"></div>
+
+{% unless product == empty %}
+<script type="application/json" id="ProductJson-{{ section.id }}">
+    {{ product | json }}
+</script>
+<script type="application/json" id="ModelJson-{{ section.id }}">
+    {{ product.media | where: 'media_type', 'model' | json }}
+</script>
+{% endunless %}
+
+{% schema %}
+{
+"name": "Product information",
+"settings": [
+    {
+        "type": "header",
+        "content": "t:sections.global.settings.header_section.content"
+    },
+    {
+        "type": "checkbox",
+        "id": "full_with",
+        "label": "t:sections.global.settings.full_width.label"
+    },
+    {
+        "type": "text",
+        "id": "max_with",
+        "label": "t:sections.global.settings.max_with.label",
+        "info": "t:sections.global.settings.max_with.info"
+    },
+    {
+        "type": "color",
+        "id": "color_bg",
+        "label": "t:sections.global.settings.bg_color.label",
+        "default": "rgba(0,0,0,0)"
+    },
+    {
+        "type": "text",
+        "id": "padding_block",
+        "label": "t:sections.global.settings.padding.label",
+        "placeholder": "0px 0px",
+        "info": "t:sections.global.settings.padding.info"
+    },
+    {
+        "type": "text",
+        "id": "padding_block_m",
+        "label": "t:sections.global.settings.padding_mobile.label",
+        "placeholder": "0px 0px",
+        "info": "t:sections.global.settings.padding_mobile.info"
+    },
+    {
+        "type": "header",
+        "content": "Product information"
+    },
+    {
+        "type": "checkbox",
+        "id": "product_sticky",
+        "label": "Enable sticky product information on large screens",
+        "default": true
+    },
+    {
+        "type": "header",
+        "content": "Media",
+        "info": "Learn more about [media types](https://help.shopify.com/manual/products/product-media)"
+    },
+    {
+        "type": "select",
+        "id": "media_layout",
+        "label": "Gallery layout",
+        "default": "stacked",
+        "options": [
+            {
+            "value": "stacked",
+            "label": "Stacked"
+            },
+                    {
+                        "value": "grid",
+                        "label": "Grid layout"
+                    },
+                    {
+                        "value": "masonry",
+                        "label": "Masonry layout"
+                    },
+                    {
+            "value": "thumbnails-top",
+            "label": "Thumbnails Top"
+            },
+            {
+            "value": "thumbnails-left",
+            "label": "Thumbnails Left"
+            },
+            {
+            "value": "thumbnails-right",
+            "label": "Thumbnails Right"
+            },
+            {
+            "value": "thumbnails",
+            "label": "Thumbnails Bottom"
+            }
+        ]
+    },
+    {
+        "type": "range",
+        "id": "thumbnail_to_show",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "label": "Number thumbnails to show",
+        "default": 8
+    },
+    {
+        "type": "checkbox",
+        "id": "enable_image_zoom",
+        "label": "Enable image zoom"
+    },
+    {
+        "type": "checkbox",
+        "id": "enable_image_popup",
+        "label": "Enable image popup"
+    },
+    {
+        "type": "checkbox",
+        "id": "enable_video_looping",
+        "label": "Enable video looping",
+        "default": false
+    },
+    {
+        "type": "checkbox",
+        "id": "enable_video_autoplay",
+        "label": "Enable video autoplay",
+        "default": false
+    },
+    {
+        "type": "checkbox",
+        "id": "enable_multi_variant",
+        "label": "Enable multiple variant images",
+        "default": false
+    },
+    {
+        "type": "header",
+        "content": "Product sidebar"
+    },
+    {
+        "type": "checkbox",
+        "id": "recommend_product",
+        "label": "Enable?"
+    },
+    {
+        "type": "text",
+        "id": "recommend_product_title",
+        "label": "Title",
+        "default": "You Might Also Like"
+    },
+    {
+        "type": "range",
+        "id": "products_to_show",
+        "min": 1,
+        "max": 12,
+        "step": 1,
+        "label": "Maximum products to show",
+        "default": 6
+    },
+    {
+        "type": "checkbox",
+        "id": "show_review",
+        "label": "Show review",
+        "default": true
+    }
+],
+"blocks": [
+        {
+            "type": "@app"
+        },
+        {
+            "type": "text",
+            "name": "Text",
+            "settings": [
+                {
+                    "type": "richtext",
+                    "id": "text",
+                    "label": "Text"
+                },
+                {
+                    "type": "color",
+                    "id": "text_color",
+                    "label": "Color"
+                },
+                {
+                    "type": "range",
+                    "id": "text_size",
+                    "min": 10,
+                    "max": 100,
+                    "step": 1,
+                    "unit": "px",
+                    "label": "Font size",
+                    "default": 15
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "vendor",
+            "name": "Vendor",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "title",
+            "name": "Title",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "price",
+            "name": "Price",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "more-action",
+            "name": "More action",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "header",
+                    "content": "Size charts"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_size_charts",
+                    "label": "Enable?",
+                    "info": "Learn more about [Size charts](https://velatheme.com/guide/velatheme-v3/metafields.html#sectionFive)"
+                },
+                {
+                    "type": "image_picker",
+                    "id": "product_size_charts_icon",
+                    "label": "Icon",
+                    "info": "Recommended size: 20x20 pixels"
+                },
+                {
+                    "type": "text",
+                    "id": "product_size_charts_title",
+                    "label": "Title",
+                    "default": "Size Charts"
+                },
+                {
+                    "type": "header",
+                    "content": "Ask a question"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_question",
+                    "label": "Enable?",
+                    "default": true
+                },
+                {
+                    "type": "image_picker",
+                    "id": "product_question_icon",
+                    "label": "Icon",
+                    "info": "Recommended size: 20x20 pixels"
+                },
+                {
+                    "type": "text",
+                    "id": "product_question_title",
+                    "label": "Title",
+                    "default": "Ask A Question"
+                },
+                {
+                    "type": "header",
+                    "content": "Product Share"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_share",
+                    "label": "Enable?",
+                    "default": true
+                },
+                {
+                    "type": "image_picker",
+                    "id": "product_share_icon",
+                    "label": "Icon",
+                    "info": "Recommended size: 20x20 pixels"
+                },
+                {
+                    "type": "text",
+                    "id": "share_label",
+                    "label": "Title",
+                    "default": "Share"
+                },
+                {
+                    "type": "paragraph",
+                    "content": "If you include a link in social media posts, the page’s featured image will be shown as the preview image. [Learn more](https:\/\/help.shopify.com\/en\/manual\/online-store\/images\/showing-social-media-thumbnail-images)."
+                },
+                {
+                    "type": "paragraph",
+                    "content": "A store title and description are included with the preview image. [Learn more](https:\/\/help.shopify.com\/en\/manual\/promoting-marketing\/seo\/adding-keywords#set-a-title-and-description-for-your-online-store)."
+                }
+            ]
+        },
+        {
+            "type": "product_count_sale",
+            "name": "Product count sale",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "text",
+                    "id": "product_sale_count",
+                    "label": "Sale count",
+                    "default": "30-40",
+                    "info": "The number of sale will vary during this interval. Example: 30-40"
+                },
+                {
+                    "type": "text",
+                    "id": "product_sale_time",
+                    "label": "Sale Time",
+                    "default": "5-20",
+                    "info": "The time of sale will vary during this interval. Example: 30-40"
+                },
+                {
+                    "type": "text",
+                    "id": "product_count_sale_text",
+                    "label": "Product Sale text",
+                    "default": "sold in last"
+                },
+                {
+                    "type": "text",
+                    "id": "product_count_sale_unit",
+                    "label": "Product Sale Unit",
+                    "default": "hours"
+                }
+            ]
+        },
+        {
+            "type": "product_real_time",
+            "name": "Real time visitors",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "text",
+                    "id": "product_real_time_count",
+                    "label": "Real time count",
+                    "default": "30-40",
+                    "info": "The number of viewers will vary during this interval. Example: 30-40"
+                },
+                {
+                    "type": "text",
+                    "id": "product_real_time_change",
+                    "label": "Number change time",
+                    "default": "5000"
+                },
+                {
+                    "type": "text",
+                    "id": "product_real_time_text",
+                    "label": "Real time text",
+                    "default": "customers are viewing this product"
+                }
+            ]
+        },
+        {
+            "type": "variant_picker",
+            "name": "Variant picker",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "header",
+                    "content": "Product options form"
+                },
+                {
+                    "type": "select",
+                    "id": "product_selector",
+                    "label": "Picker type",
+                    "options": [
+                        {
+                            "value": "radio",
+                            "label": "Button"
+                        },
+                        {
+                            "value": "select",
+                            "label": "Dropdown"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "product_unavailable_variants",
+                    "label": "Handle unavailable variants",
+                    "options": [
+                    {
+                        "value": "disable",
+                        "label": "Disable"
+                    },
+                    {
+                        "value": "hide",
+                        "label": "Hide"
+                    }
+                    ],
+                    "default": "hide"
+                },
+                {
+                    "type": "header",
+                    "content": "Color swatches"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_color_enable",
+                    "label": "Show color swatches",
+                    "default": true
+                },
+                {
+                    "type": "select",
+                    "id": "product_swatches_type",
+                    "label": "Color swatches type",
+                    "options": [
+                        {
+                            "value": "metafields",
+                            "label": "Use category metafields"
+                        },
+                        {
+                            "value": "variant",
+                            "label": "Use image variant"
+                        }
+                    ],
+                    "default": "metafields"
+                }
+            ]
+        },
+        {
+            "type": "buy_buttons",
+            "name": "Buy buttons",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "header",
+                    "content": "Product quantity form"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "quantity_enabled",
+                    "label": "Show quantity picker"
+                },
+                {
+                    "type": "select",
+                    "id": "quantity_selector",
+                    "label": "Quantity type",
+                    "options": [
+                        {
+                        "value": "text",
+                        "label": "Text"
+                        },
+                        {
+                        "value": "select",
+                        "label": "Dropdown"
+                        }
+                    ]
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_wishlist",
+                    "label": "Show wishlist",
+                    "default": true
+                },
+                {
+                    "type": "checkbox",
+                    "id": "enable_payment_button",
+                    "label": "Show dynamic checkout button",
+                    "info": "Each customer will see their preferred payment method from those available on your store, such as PayPal or Apple Pay. [Learn more](https://help.shopify.com/manual/using-themes/change-the-layout/dynamic-checkout)",
+                    "default": true
+                },
+                {
+                    "type": "checkbox",
+                    "id": "enable_pickup_availability",
+                    "label": "Show pickup availability",
+                    "info": "Setting up pickup in store for online orders. [Learn more](https://help.shopify.com/en/manual/fulfillment/setup/delivery-methods/pickup-in-store)",
+                    "default": true
+                }
+            ]
+        },
+        {
+            "type": "description",
+            "name": "Description",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        
+        },
+        {
+            "type": "product_organization",
+            "name": "Product organization",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "checkbox",
+                    "id": "product_available_enable",
+                    "label": "Show product available",
+                    "default": true
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_sku_enable",
+                    "label": "Show product SKU",
+                    "default": true
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_type_enable",
+                    "label": "Show product type",
+                    "default": true
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_tag_enable",
+                    "label": "Show product tag",
+                    "default": true
+                },
+                {
+                    "type": "header",
+                    "content": "Product Collections"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "product_collection_enable",
+                    "label": "Show product collections",
+                    "default": true
+                },
+                {
+                    "type": "text",
+                    "id": "product_collection_title",
+                    "label": "Heading",
+                    "default": "Categories:"
+                },
+                {
+                    "type": "range",
+                    "id": "product_coll_limit",
+                    "min": 1,
+                    "max": 10,
+                    "step": 1,
+                    "unit": "pcs",
+                    "label": "Limit",
+                    "default": 6
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "countdown",
+            "name": "Count down",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "paragraph",
+                    "content": "countdown display on product [Guideline?](https:\/\/velatheme.com\/guide\/velatheme-v3\/metafields.html#sectionThree)"
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                },
+                {
+                    "type": "html",
+                    "id": "heading",
+                    "label": "Heading",
+                    "default":"Hurry up ! Deal ends in:"
+                }
+            ]
+        },
+        {
+            "type": "custom_liquid",
+            "name": "Custom liquid",
+            "settings": [
+                {
+                    "type": "liquid",
+                    "id": "custom_liquid",
+                    "label": "Custom liquid",
+                    "info": "Add app snippets or other Liquid code to create advanced customizations."
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "product_banner",
+            "name": "Banner",
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "product_banner_heading",
+                    "label": "Heading"
+                },
+                {
+                    "type": "image_picker",
+                    "id": "product_banner",
+                    "label": "Banner"
+                },
+                {
+                    "type": "color",
+                    "id": "product_banner_bg_color",
+                    "label": "Background-color",
+                    "default": "rgba(0,0,0,0)"
+                },
+                {
+                    "type": "text",
+                    "id": "product_banner_padding",
+                    "label": "Padding"
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "gift_box",
+            "name": "Gift box",
+            "settings": [
+                {
+                    "type": "product",
+                    "id": "product_gift",
+                    "label": "Select a product"
+                },
+                {
+                    "type": "text",
+                    "id": "product_gift_heading",
+                    "label": "Heading",
+                    "default": "CONGRATULATIONS!"
+                },
+                {
+                    "type": "html",
+                    "id": "product_gift_text",
+                    "label": "Text",
+                    "default": "Simply copy the code below and use it when you checkout to enjoy an additional 20% OFF sitewide"
+                },
+                {
+                    "type": "text",
+                    "id": "product_gift_code",
+                    "label": "Gift code",
+                    "default": "XXXXXX"
+                }
+            ]
+        },
+        {
+            "type": "product_sold",
+            "name": "product sold",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "text_before",
+                    "label": "Text before",
+                    "default": "Hurry Up! Sold"
+                },
+                {
+                    "type": "text",
+                    "id": "text_after",
+                    "label": "Text after",
+                    "default": "products in stock."
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "collapsible_tab",
+            "name": "Collapsible tab",
+            "settings": [
+                {
+                    "type": "checkbox",
+                    "id": "collapsible_active",
+                    "label": "Show"
+                },
+                {
+                    "type": "text",
+                    "id": "heading",
+                    "default": "Collapsible tab",
+                    "info": "Include a heading that explains the content.",
+                    "label": "Heading"
+                },
+                {
+                "type": "richtext",
+                "id": "content",
+                "label": "content"
+                },
+                {
+                    "type": "html",
+                    "id": "html",
+                    "label": "content HTML"
+                },
+                {
+                    "type": "image_picker",
+                    "id": "image",
+                    "label": "Image"
+                },
+                {
+                    "type": "page",
+                    "id": "page",
+                    "label": "Tab content from page"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "description",
+                    "label": "Use product description?",
+                    "default": false
+                },
+                {
+                    "type": "checkbox",
+                    "id": "review",
+                    "label": "Show review",
+                    "info": "Our theme supports Judge.me Product Reviews app. you can find it [here](https:\/\/apps.shopify.com\/judgeme)",
+                    "default":false
+                }
+            ]
+        },
+        {
+            "type": "popup",
+            "name": "Pop-up",
+            "settings": [
+                {
+                    "type": "text",
+                    "id": "text",
+                    "default": "Pop-up link text",
+                    "label": "Link label"
+                },
+                {
+                    "id": "page",
+                    "type": "page",
+                    "label": "Page"
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "border",
+            "name": "border",
+            "settings": [
+                {
+                    "type": "select",
+                    "id": "border_style",
+                    "label": "Border style",
+                    "default": "solid",
+                    "options": [
+                        {
+                            "value": "dashed",
+                            "label": "Dashed"
+                        },			  	
+                        {
+                            "value": "dotted",
+                            "label": "Dotted"
+                        },			  	
+                        {
+                            "value": "double",
+                            "label": "Double"
+                        },			  	
+                        {
+                            "value": "solid",
+                            "label": "Solid"
+                        },
+                        {
+                            "value": "groove",
+                            "label": "Groove"
+                        },			  	
+                        {
+                            "value": "ridge",
+                            "label": "Ridge"
+                        }
+                    ]
+                },
+                {
+                    "type": "range",
+                    "id": "border_width",
+                    "min": 1,
+                    "max": 50,
+                    "step": 1,
+                    "unit": "px",
+                    "label": "Font size",
+                    "default": 1
+                },
+                {
+                    "type": "color",
+                    "id": "border_color",
+                    "label": "Border color",
+                    "default": "#ccc"
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "complementary",
+            "name": "Complementary products",
+            "limit": 1,
+            "settings": [
+                {
+                    "type": "paragraph",
+                    "content": "To select complementary products, add the Search & Discovery app. [Learn more](https:\/\/help.shopify.com\/manual\/online-store\/search-and-discovery\/product-recommendations)"
+                },
+                {
+                    "type": "checkbox",
+                    "id": "complementary_addtocart",
+                    "label": "Enable quick add button",
+                    "default": true
+                },
+                {
+                    "type": "html",
+                    "id": "heading",
+                    "label": "Heading",
+                    "default": "Pairs well with"
+                },
+                {
+                    "type": "range",
+                    "id": "products_to_show",
+                    "min": 2,
+                    "max": 10,
+                    "step": 1,
+                    "default": 5,
+                    "label": "Maximum products to show"
+                },
+                {
+                    "type": "range",
+                    "id": "column1",
+                    "min": 1,
+                    "max": 6,
+                    "step": 1,
+                    "label": "Number of columns on desktop",
+                    "default": 5
+                },
+                {
+                    "type": "range",
+                    "id": "column2",
+                    "min": 1,
+                    "max": 5,
+                    "step": 1,
+                    "label": "Number of columns on tablet",
+                    "default": 3
+                },
+                {
+                    "type": "range",
+                    "id": "column3",
+                    "min": 1,
+                    "max": 5,
+                    "step": 1,
+                    "label": "Number of columns on mobile",
+                    "default": 2
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin",
+                    "label": "Bottom margin on desktop",
+                    "default": "mb-md-4",
+                    "options": [
+                        {
+                            "value": "mb-md-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-md-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-md-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-md-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-md-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-md-5",
+                            "label": "40px"
+                        },
+                        {
+                            "value": "mb-md-6",
+                            "label": "50px"
+                        }
+                    ]
+                },
+                {
+                    "type": "select",
+                    "id": "block_margin_m",
+                    "label": "Bottom margin on mobile",
+                    "default": "mb-3",
+                    "options": [
+                        {
+                            "value": "mb-0",
+                            "label": "0"
+                        },
+                        {
+                            "value": "mb-1",
+                            "label": "6px"
+                        },
+                        {
+                            "value": "mb-2",
+                            "label": "10px"
+                        },
+                        {
+                            "value": "mb-3",
+                            "label": "20px"
+                        },
+                        {
+                            "value": "mb-4",
+                            "label": "30px"
+                        },
+                        {
+                            "value": "mb-5",
+                            "label": "40px"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+{% endschema %}

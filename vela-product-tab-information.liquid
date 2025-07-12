@@ -1,0 +1,514 @@
+{{ 'product-tab-information.css' | asset_url | stylesheet_tag }}
+
+<!-- Woo2Shopify Translation Variables -->
+{% assign current_locale = request.locale.iso_code %}
+{% assign translated_title = product.title %}
+{% assign translated_description = product.description %}
+{% assign translated_short_description = '' %}
+
+{% comment %} Force check URL for language {% endcomment %}
+{% if request.path contains '/tr/' %}
+  {% assign current_locale = 'tr' %}
+{% elsif request.path contains '/de/' %}
+  {% assign current_locale = 'de' %}
+{% elsif request.path contains '/en/' %}
+  {% assign current_locale = 'en' %}
+{% endif %}
+
+{% case current_locale %}
+  {% when 'tr' %}
+    {% if product.metafields.custom.title_tr != blank %}
+      {% assign translated_title = product.metafields.custom.title_tr %}
+    {% endif %}
+    {% if product.metafields.custom.description_tr != blank %}
+      {% assign translated_description = product.metafields.custom.description_tr %}
+    {% endif %}
+    {% if product.metafields.custom.short_description_tr != blank %}
+      {% assign translated_short_description = product.metafields.custom.short_description_tr %}
+    {% endif %}
+  {% when 'de' %}
+    {% if product.metafields.custom.title_de != blank %}
+      {% assign translated_title = product.metafields.custom.title_de %}
+    {% endif %}
+    {% if product.metafields.custom.description_de != blank %}
+      {% assign translated_description = product.metafields.custom.description_de %}
+    {% endif %}
+    {% if product.metafields.custom.short_description_de != blank %}
+      {% assign translated_short_description = product.metafields.custom.short_description_de %}
+    {% endif %}
+{% endcase %}
+<!-- Translation Variables End -->
+
+{%- liquid
+  assign section_classes = 'vela-section velaproduct-details overflow-hidden'
+  if section.settings.full_width and section.settings.max_width
+    assign section_classes = section_classes | append: ' mx-auto'
+  endif
+
+  capture section_styles
+    render 'section-styles', settings: section.settings
+  endcapture
+
+  assign container_classes = 'container'
+  if section.settings.full_width
+    assign container_classes = 'container-full'
+  endif
+
+  comment
+    first, second, third
+  endcomment
+  assign desktop_layout = section.settings.desktop_layout
+  assign mobile_layout = section.settings.mobile_layout
+-%}
+
+<div
+  class="{{ section_classes }}"
+  style="{{ section_styles }}"
+>
+  {%- if desktop_layout == 'first' -%}
+    {%- render 'product-details-nav', blocks: section.blocks, container_classes: container_classes -%}
+  {%- endif -%}
+
+  {%- liquid
+    assign content_classes = 'velaproduct-details__blocks'
+    assign content_classes = content_classes | append: ' desktop-' | append: desktop_layout
+    if desktop_layout == 'first'
+      assign content_classes = content_classes | append: ' tab-content'
+    endif
+  -%}
+  <div class="{{ content_classes }}">
+    {%- for block in section.blocks -%}
+      {%- liquid
+        assign block_classes = 'velaproduct-details__block'
+
+        assign block_styles = ''
+        assign padding = block.settings.padding | default: '0px'
+        assign inner_padding = block.settings.inner_padding | default: '0px'
+        assign block_styles = block_styles | append: '--padding: ' | append: padding | append: ';'
+        assign block_styles = block_styles | append: ' --inner-padding: ' | append: inner_padding | append: ';'
+        assign block_styles = block_styles | append: ' --bg-color: ' | append: block.settings.bg_color | append: ';'
+        assign block_styles = block_styles | append: ' --inner-bg-color: ' | append: block.settings.inner_bg_color | append: ';'
+
+        if desktop_layout == 'first' and forloop.first
+          assign block_classes = block_classes | append: ' tab-pane fade show active'
+        elsif desktop_layout == 'first'
+          assign block_classes = block_classes | append: ' tab-pane fade'
+        endif
+
+        assign heading = block.settings.heading
+        assign heading_handleize = heading | handleize
+        assign block_id = heading_handleize | append: '-tabpanel'
+        assign block_content_id = heading_handleize | append: '-block-content'
+
+        assign block_heading_classes = 'product-details__heading'
+        assign block_heading_attributes = ''
+        assign block_content_classes = 'product-details__content'
+
+        if mobile_layout == 'first'
+          assign block_heading_classes = block_heading_classes | append: ' product-details__heading--offcanvas'
+          assign block_heading_attributes = block_heading_attributes | append: 'data-bs-toggle="offcanvas" data-bs-target="#' | append: block_content_id | append: '"'
+          assign block_content_classes = block_content_classes | append: ' offcanvas offcanvas-end'
+        elsif mobile_layout == 'second'
+          assign block_heading_classes = block_heading_classes | append: ' product-details__heading--collapse collapsed'
+          assign block_heading_attributes = block_heading_attributes | append: 'data-bs-toggle="collapse" data-bs-target="#' | append: block_content_id | append: '"'
+          assign block_content_classes = block_content_classes | append: ' collapse'
+        endif
+      -%}
+      <div
+        id="{{ block_id }}"
+        class="{{ block_classes }}"
+        style="{{ block_styles }}"
+        data-class="{{ block_classes }}"
+        {{ block.shopify_attributes }}
+      >
+        <div class="{{ container_classes }}">
+          <div class="product-details desktop-{{ desktop_layout }} mobile-{{ mobile_layout }}">
+            {% comment %}
+              BLOCK HEADING
+            {% endcomment %}
+            <button
+              class="{{ block_heading_classes }}"
+              {{ block_heading_attributes }}
+            >
+              <span>{{ heading }}</span>
+              {%- if mobile_layout == 'first' -%}{%- render 'icons', icon: 'angle-right', class: 'angle-right d-block d-md-none', attr: 'width="7" height="12"'-%}{%- endif -%}
+            </button>
+            {% comment %}
+              BLOCK CONTENT
+            {% endcomment %}
+            <div id="{{ block_content_id }}" class="{{ block_content_classes }}">
+
+              {%- if mobile_layout == 'first' -%}
+                <div class="product-details__header">
+                  <span>{{ heading }}</span>
+                  <button class="product-details__header-close vela__btn-close" data-bs-dismiss="offcanvas" aria-label="Close">
+                    {% render 'icons', icon: 'line', class: 'icon-line position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                    {% render 'icons', icon: 'line', class: 'icon-line1 position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                  </button>
+                </div>
+              {%- endif -%}
+
+              <div class="product-details__body">
+                {%- case block.type -%}
+                  {%- when 'description' -%}
+                    <div class="product-details__description">{{ translated_description | default: product.description }}</div>
+                  {%- when 'review' -%}
+                    <div class="product-details__review">
+                      {% comment %}
+                        Judge.me code
+                      {% endcomment %}
+                      <div style='clear:both'></div>
+                      <div id='judgeme_product_reviews' class='jdgm-widget jdgm-review-widget' data-id='{{ product.id }}'>{{ product.metafields.judgeme.widget }}</div>
+                    </div>
+                  {%- when 'page' -%}
+                    {{- 'multiple-collapse.css' | asset_url | stylesheet_tag -}}
+                    {%- assign page = block.settings.page -%}
+                    <div class="product-details__page">{{ page.content }}</div>
+                  {%- when 'extra_tab' -%}
+                    {%- assign image = block.settings.image -%}
+                    <div class="product-details__extra">
+                      <div class="product-details__extra-first">{{ block.settings.content }}</div>
+                      <div class="product-details__extra-second">{{ block.settings.content_1 }}</div>
+                      {%- if image != blank -%}
+                        <div class="more-info-tabs__image mb-2">
+                          {% render 'img-global', image: image, image_style: true %}
+                        </div>
+                      {%- endif -%}
+                    </div>
+                {%- endcase -%}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {%- endfor -%}
+  </div>
+</div>
+
+{%- if mobile_layout == 'first' -%}
+  <script type="text/javascript">
+    window.addEventListener('resize', debounce(function() {
+      if(window.innerWidth > 767) {
+        const elements = document.querySelectorAll('.product-details__content');
+        elements.forEach((element) => {
+          let offcanvas = bootstrap.Offcanvas.getInstance(element);
+          if (offcanvas) offcanvas.hide();
+        });
+      }
+    }, 300));
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Product tab information",
+  "tag": "section",
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:sections.global.settings.header_section.content"
+    },
+    {
+      "type": "checkbox",
+      "id": "full_width",
+      "label": "t:sections.global.settings.full_width.label"
+    },
+    {
+      "type": "text",
+      "id": "max_width",
+      "label": "t:sections.global.settings.max_with.label",
+      "info": "t:sections.global.settings.max_with.info"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "t:sections.global.settings.bg_color.label",
+      "default": "rgba(0,0,0,0)"
+    },
+    {
+      "type": "text",
+      "id": "padding_block",
+      "label": "t:sections.global.settings.padding.label",
+      "placeholder": "0px 0px",
+      "info": "t:sections.global.settings.padding.info"
+    },
+    {
+      "type": "text",
+      "id": "padding_block_m",
+      "label": "t:sections.global.settings.padding_mobile.label",
+      "placeholder": "0px 0px",
+      "info": "t:sections.global.settings.padding_mobile.info"
+    },
+    {
+      "type": "text",
+      "id": "margin_block",
+      "label": "t:sections.global.settings.margin.label",
+      "placeholder": "0px 0px"
+    },
+    {
+      "type": "header",
+      "content": "Desktop Layout"
+    },
+    {
+      "type": "select",
+      "id": "desktop_layout",
+      "label": "Layout style",
+      "default": "first",
+      "options": [
+        {
+          "value": "first",
+          "label": "First"
+        },
+        {
+          "value": "second",
+          "label": "Second"
+        },
+        {
+          "value": "third",
+          "label": "Third"
+        }
+      ]
+    },
+    {
+      "type": "header",
+      "content": "Mobile Layout"
+    },
+    {
+      "type": "select",
+      "id": "mobile_layout",
+      "label": "Layout style",
+      "default": "first",
+      "options": [
+        {
+          "value": "first",
+          "label": "First"
+        },
+        {
+          "value": "second",
+          "label": "Second"
+        },
+        {
+          "value": "third",
+          "label": "Third"
+        }
+      ]
+    }
+  ],
+  "blocks": [
+    {
+      "type": "description",
+      "name": "Product description",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "header",
+          "content": "Block layout"
+        },
+        {
+          "type": "color",
+          "id": "bg_color",
+          "label": "Background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "color",
+          "id": "inner_bg_color",
+          "label": "Inner background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "text",
+          "id": "padding",
+          "label": "t:sections.global.settings.padding.label",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "text",
+          "id": "inner_padding",
+          "label": "Inner padding",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "header",
+          "content": "Block settings"
+        },
+        {
+          "type": "inline_richtext",
+          "id": "heading",
+          "label": "Heading",
+          "default": "Heading",
+          "info": "Include a heading that explains the content."
+        }
+      ]
+    },
+    {
+      "type": "extra_tab",
+      "name": "Extra tab",
+      "limit": 3,
+      "settings": [
+        {
+          "type": "header",
+          "content": "Block layout"
+        },
+        {
+          "type": "color",
+          "id": "bg_color",
+          "label": "Background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "color",
+          "id": "inner_bg_color",
+          "label": "Inner background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "text",
+          "id": "padding",
+          "label": "t:sections.global.settings.padding.label",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "text",
+          "id": "inner_padding",
+          "label": "Inner padding",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "header",
+          "content": "Block settings"
+        },
+        {
+          "type": "inline_richtext",
+          "id": "heading",
+          "label": "Heading",
+          "default": "Heading",
+          "info": "Include a heading that explains the content."
+        },
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image"
+        },
+        {
+          "type": "html",
+          "id": "content",
+          "label": "Tab content",
+          "info": "HTML"
+        },
+        {
+          "type": "richtext",
+          "id": "content_1",
+          "label": "Tab content"
+        }
+      ]
+    },
+    {
+      "type": "page",
+      "name": "Page content",
+      "limit": 3,
+      "settings": [
+        {
+          "type": "header",
+          "content": "Block layout"
+        },
+        {
+          "type": "color",
+          "id": "bg_color",
+          "label": "Background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "color",
+          "id": "inner_bg_color",
+          "label": "Inner background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "text",
+          "id": "padding",
+          "label": "t:sections.global.settings.padding.label",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "text",
+          "id": "inner_padding",
+          "label": "Inner padding",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "header",
+          "content": "Block settings"
+        },
+        {
+          "type": "inline_richtext",
+          "id": "heading",
+          "label": "Heading",
+          "default": "Heading",
+          "info": "Include a heading that explains the content."
+        },
+        {
+          "type": "page",
+          "id": "page",
+          "label": "Page",
+          "info": "To add a page, go to your [pages.](/admin/pages)"
+        }
+      ]
+    },
+    {
+      "type": "review",
+      "name": "Review",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "header",
+          "content": "Block layout"
+        },
+        {
+          "type": "color",
+          "id": "bg_color",
+          "label": "Background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "color",
+          "id": "inner_bg_color",
+          "label": "Inner background color",
+          "default": "rgba(0,0,0,0)"
+        },
+        {
+          "type": "text",
+          "id": "padding",
+          "label": "t:sections.global.settings.padding.label",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "text",
+          "id": "inner_padding",
+          "label": "Inner padding",
+          "placeholder": "0px 0px",
+          "info": "t:sections.global.settings.padding.info"
+        },
+        {
+          "type": "header",
+          "content": "Block settings"
+        },
+        {
+          "type": "inline_richtext",
+          "id": "heading",
+          "label": "Heading",
+          "default": "Reviews",
+          "info": "Our theme supports Judge.me Product Reviews app. you can find it [here](https:\/\/apps.shopify.com\/judgeme)"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

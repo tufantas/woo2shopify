@@ -1,0 +1,522 @@
+{%- if product.metafields.custom.pre_order and settings.pre-order  and current_variant.available -%}
+    {%- assign preOrder = true -%}
+{%- else -%}
+    {%- assign preOrder = false -%}
+{%- endif -%}
+<div class="product-single__meta ms-xl-1 {% if section.settings.product_sticky %}sticky-top z-index-1{% endif %}">  
+    {%- assign collapsible_first = false-%}
+    {%- for block in section.blocks -%}
+        {% if block.type == 'collapsible_tab' %}
+            {%- assign collapsible_first = true -%}
+            {%- assign collapsible_last = forloop.index -%}
+        {% endif %}
+    {%- endfor-%}
+    {%- for block in section.blocks -%}
+        {%- case block.type -%}
+            {%- when '@app' -%}
+                {% render block %}
+            {%- when 'text' -%}
+                <div class="product-single__text {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}"  style="color: {{ block.settings.text_color }}; font-size: {{ block.settings.text_size }}px" {{ block.shopify_attributes }}>{{ block.settings.text }}</div>
+            {%- when 'countdown' -%}
+                {%- if product.metafields.custom.countdown != blank -%}
+                    {% assign final_time = product.metafields.custom.countdown %} 
+                    <div class="product-single__countdown d-flex {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" {{ block.shopify_attributes }}>
+                        <div class="countdown-wrapper">
+                            <p class="countdown-title mb-2">
+                                <span class="icon">
+                                    <svg width="16" enable-background="new 0 0 128 128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><radialGradient id="a" cx="68.8839" cy="124.2963" gradientTransform="matrix(-1 -.00434301 -.00712592 1.6408 131.9857 -79.3452)" gradientUnits="userSpaceOnUse" r="70.587"><stop offset=".3144" stop-color="#ff9800"/><stop offset=".6616" stop-color="#ff6d00"/><stop offset=".9715" stop-color="#f44336"/></radialGradient><radialGradient id="b" cx="64.9211" cy="54.0621" gradientTransform="matrix(-.0101 .9999 .7525 .00760378 26.1538 -11.2668)" gradientUnits="userSpaceOnUse" r="73.8599"><stop offset=".2141" stop-color="#fff176"/><stop offset=".3275" stop-color="#fff27d"/><stop offset=".4868" stop-color="#fff48f"/><stop offset=".6722" stop-color="#fff7ad"/><stop offset=".7931" stop-color="#fff9c4"/><stop offset=".8221" stop-color="#fff8bd" stop-opacity=".804"/><stop offset=".8627" stop-color="#fff6ab" stop-opacity=".529"/><stop offset=".9101" stop-color="#fff38d" stop-opacity=".2088"/><stop offset=".9409" stop-color="#fff176" stop-opacity="0"/></radialGradient><path d="m35.56 40.73c-.57 6.08-.97 16.84 2.62 21.42 0 0-1.69-11.82 13.46-26.65 6.1-5.97 7.51-14.09 5.38-20.18-1.21-3.45-3.42-6.3-5.34-8.29-1.12-1.17-.26-3.1 1.37-3.03 9.86.44 25.84 3.18 32.63 20.22 2.98 7.48 3.2 15.21 1.78 23.07-.9 5.02-4.1 16.18 3.2 17.55 5.21.98 7.73-3.16 8.86-6.14.47-1.24 2.1-1.55 2.98-.56 8.8 10.01 9.55 21.8 7.73 31.95-3.52 19.62-23.39 33.9-43.13 33.9-24.66 0-44.29-14.11-49.38-39.65-2.05-10.31-1.01-30.71 14.89-45.11 1.18-1.08 3.11-.12 2.95 1.5z" fill="url(#a)"/><path d="m76.11 77.42c-9.09-11.7-5.02-25.05-2.79-30.37.3-.7-.5-1.36-1.13-.93-3.91 2.66-11.92 8.92-15.65 17.73-5.05 11.91-4.69 17.74-1.7 24.86 1.8 4.29-.29 5.2-1.34 5.36-1.02.16-1.96-.52-2.71-1.23-2.15-2.05-3.7-4.72-4.44-7.6-.16-.62-.97-.79-1.34-.28-2.8 3.87-4.25 10.08-4.32 14.47-.22 13.57 10.99 24.57 24.55 24.57 17.09 0 29.54-18.9 19.72-34.7-2.85-4.6-5.53-7.61-8.85-11.88z" fill="url(#b)"/></svg>
+                                </span>
+                                {{ block.settings.heading }}
+                            </p>
+                            <div class="product-single__countdown--list d-flex text-center" data-countdown="{{ final_time }}"></div>
+                        </div>
+                    </div>
+                {%- endif -%}
+            {%- when 'product_sold' -%}
+                {%- if product.metafields.custom.totalinventory -%}
+                    {%- assign total_inventory = product.metafields.custom.totalinventory -%}
+                    {% assign product_qty = product.selected_or_first_available_variant.inventory_quantity %}
+                    {%- if total_inventory > 0 and total_inventory > product_qty -%}
+                        {% assign progress = total_inventory | minus: product_qty | times: 100 | divided_by: total_inventory | ceil  %}
+                        <div class="product-single__inventory {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                            <div class="d-flex flex-wrap mb-1">
+                                <span class="text-after">{{ block.settings.text_before }}</span><span class="product_number px-1">{{ total_inventory | minus: product_qty }}/{{ total_inventory }}</span><span class="text-before">{{ block.settings.text_after }}</span>
+                            </div>
+                            <div class="progress mb-1">
+                                <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ progress }}%" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    {%- endif -%}
+                {%- endif -%}
+            {%- when 'vendor' -%}
+                <p class="product-single__vendor lh-1 {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" {{ block.shopify_attributes }}>
+                    {{ product.vendor | link_to_vendor }}
+                </p>
+            {%- when 'title' -%}
+                <h1 class="product-single__title {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" {{ block.shopify_attributes }}>
+                    {{ translated_title | default: product.title | escape }}
+                </h1>
+            {%- when 'product_organization' -%}
+                <div class="product__organization--wrap {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    {%- if block.settings.product_available_enable -%}
+                        <div class="js-product-avaiable product-single__organization product-avaiable position-relative">
+                            <div class="product-single-organization__label">{{ 'products.product.sku' | t }}</div>
+                            {%- if preOrder and current_variant.available -%}
+                                <div class="js-product-avaiable-text product-single-organization__text product-avaiable__pre--order text-info">{{'products.general.label_pre_order' | t }}</div>
+                            {% elsif current_variant.available %}
+                                <div class="js-product-avaiable-text product-single-organization__text product-avaiable__text--instock">{{'products.product.in_stock' | t }}</div>
+                            {%- else -%}
+                                <div class="js-product-avaiable-text product-single-organization__text product-avaiable__text--outstock">{{'products.product.out_stock' | t }}</div>
+                            {%- endif -%}
+                        </div>
+                    {%- endif -%}
+                    {%- if block.settings.product_sku_enable -%}
+                        <div class="product-single__organization">
+                            <div class="product-single-organization__label label_sku">{{ 'products.product.sku' | t }}</div>
+                            <div class="js-variant-sku product-single-organization__text">{{ product.selected_or_first_available_variant.sku | default: "N/A" }}</div>
+                        </div>
+                    {%- endif -%}
+                    {%- if block.settings.product_type_enable -%}
+                        <div class="product-single__organization">
+                            <div class="product-single-organization__label">{{ 'products.product.type' | t }}</div>
+                            <div class="product-single-organization__text">{{ product.type | link_to_type }}</div>
+                        </div>
+                    {%- endif -%}
+                    {%- if block.settings.product_tag_enable and product.tags.size > 0 -%}
+                        <div class="product-single__organization">
+                            <div class="product-single-organization__label">{{ 'products.product.tags' | t }}</div>
+                            <div class="product-single-organization__text">
+                                {% for tag in product.tags %}
+                                    <a href="{{ routes.all_products_collection_url }}/{{ tag }}" title="{{ tag }}">{{ tag }}</a>{% unless forloop.last %},{% endunless%}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {%- endif -%}
+                    {% comment %}Product collections{% endcomment %}
+                    {%- if block.settings.product_collection_enable -%}
+                        {%- assign limit = block.settings.product_coll_limit | plus: 0 -%}
+                        <div class="product__organization product-details-categories d-flex flex-wrap">
+                            {%- if block.settings.product_collection_title != blank -%}
+                                <div class="product-single-organization__label">{{ block.settings.product_collection_title }}</div>
+                            {%- endif -%}
+                            <div class="product-single-organization__text">
+                                {% for collection in product.collections limit: limit %}
+                                    {%- if forloop.last -%}
+                                    <a href="{{ collection.url }}" title="{{ collection.title | strip_html }}">{{ collection.title }}</a>
+                                    {%- else -%}
+                                    <a href="{{ collection.url }}" title="{{ collection.title | strip_html }}">{{ collection.title }},</a> 
+                                    {%- endif -%}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {%- endif -%}
+                </div>
+            {%- when 'price' -%}
+                <div class="d-flex align-items-center{% if settings.product_reviews_enable %} justify-content-between{% endif %} {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    {% include 'product-price', variant: current_variant %}
+                    {%- if settings.product_reviews_enable -%}
+                        <div class="product-single__reviews d-flex">
+                            <!-- Start of Judge.me code --> 
+                            <div class='jdgm-widget jdgm-preview-badge' data-id='{{ product.id }}'> 
+                                {{ product.metafields.judgeme.badge }} 
+                            </div> 
+                        </div>
+                    {%- endif -%}
+                </div>
+            {%- when 'description' -%}
+                <!-- Debug: Description Block ACTIVE! -->
+                <div style="background: #ff6b6b; color: white; padding: 15px; margin: 15px 0; font-family: monospace; font-size: 14px; font-weight: bold;">
+                  � DESCRIPTION BLOCK IS RUNNING! 🚨<br>
+                  translated_description: <code style="color: yellow;">{{ translated_description | default: "❌ EMPTY" | truncate: 80 }}</code><br>
+                  product.description: <code style="color: yellow;">{{ product.description | default: "❌ EMPTY" | truncate: 80 }}</code><br>
+                  Using: <code style="color: yellow;">{% if translated_description != blank %}translated_description{% else %}product.description{% endif %}</code>
+                </div>
+
+                {%- if product.description != blank or translated_description != blank -%}
+                    <div class="product__description rte {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" {{ block.shopify_attributes }}>
+                        {{ translated_description | default: product.description }}
+                    </div>
+                {%- endif -%}
+            {%- when 'custom_liquid' -%}
+                <div class="custom_liquid--wrap {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    {{ block.settings.custom_liquid }}
+                </div>
+            {%- when 'service' -%}
+                <div class="product-single__service px-3 py-4 {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" >
+                    <div class="row g-3 g-lg-4 row-cols-1 row-cols-md-3">
+                        {% for i in (1..4) %}
+                            {%- assign icon = "icon" | append: forloop.index -%}
+                            {% assign service_title = 'box_title' | append: forloop.index %}
+                            {% assign service_desc = 'box_desc' | append: forloop.index %}
+                            {% if block.settings[service_title] != blank or block.settings[service_desc] != blank %}
+                                <div class="col services-box text-center">
+                                    <div class="d-flex flex-column align-items-center">
+                                        {%- if block.settings[icon] != blank -%}
+                                            <div class="services-box__image mb-2">
+                                                {%- render 'img-global', image: block.settings[icon], max_width: 36, image_style: true -%}
+                                            </div>
+                                        {%- endif -%}
+                                        <div class="services-box__content">
+                                            {%- if block.settings[service_title] != blank -%}
+                                                <h5 class="services-title fs-bs mb-1">{{ block.settings[service_title] }}</h5>
+                                            {%- endif -%}
+                                            {%- if block.settings[service_desc] != blank -%}
+                                                <div class="services-desc fs-12">
+                                                    {{ block.settings[service_desc] }}
+                                                </div>
+                                            {%- endif -%}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {%- when 'product_banner' -%}
+                <div class="product-single__banner border rounded-1 position-relative d-flex justify-content-center {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" style="--plh-svg-h: 50px; margin-top: 10px; --border-color: #EFF0F2; background-color: {{ block.settings.product_banner_bg_color }};{% if block.settings.product_banner_padding != blank %}padding: {{ block.settings.product_banner_padding }};{% endif %}">
+                    {%- if block.settings.product_banner_heading != blank -%}
+                        <div class="fs-12 px-2 position-absolute top-0 start-50 translate-middle-x" style="margin-top: -13px; background-color: {{ block.settings.product_banner_bg_color }};"> {{ block.settings.product_banner_heading }} </div>
+                    {%- endif -%}
+                    {% if block.settings.product_banner != blank  %}
+                        {% render 'img-global', image: block.settings.product_banner, image_style: true, img_fix_w: true %}
+                    {% else %}
+                        {{ 'image' | placeholder_svg_tag: 'placeholder-svg' }}
+                    {% endif %}
+                </div>
+            {%- when 'collapsible_tab' -%}
+                {%- if collapsible_first -%}
+                    <div class="accordion" id="product-single__accordion" {{ block.shopify_attributes }}>
+                {%- endif -%}
+                    <div class="product-single__accordion-item">
+                        <a class="accordion-header accordion-button fs-13 fw-semibold text-uppercase lh-1 {% unless block.settings.collapsible_active %} collapsed{% endunless%}" role="button" data-bs-toggle="collapse" href="#collapse{{ forloop.index }}" aria-expanded="true" aria-controls="collapse{{ forloop.index }}">
+                            {{ block.settings.heading | default: block.settings.page.title }}
+                        </a>
+                        <div id="collapse{{ forloop.index }}" class="accordion-collapse collapse{% if block.settings.collapsible_active %} show{% endif %}" aria-labelledby="heading{{ forloop.index }}" data-bs-parent="#product-single__accordion">
+                            <div class="accordion-body">
+                                {{ block.settings.content }}
+                                {{ block.settings.html }}
+                                {{ block.settings.page.content }}
+                                {%- if block.settings.image != blank -%}
+                                    <div class="collpsible__image mb-2">
+                                        <img class="img-fluid lazyload" data-src="{{ block.settings.image | img_url: 'master'}}" data-size="auto" />
+                                    </div>
+                                {%- endif -%}
+                                {%- if block.settings.description -%}
+                                    <div class="rte">{{ translated_description | default: product.description }}</div>
+                                {%- endif -%}
+                                {%- if block.settings.review -%}
+                                    <div class="product-single__from-reviews">
+                                        <!-- Start of Judge.me code --> 
+                                        <div style='clear:both'></div> 
+                                        <div id='judgeme_product_reviews' class='jdgm-widget jdgm-review-widget' data-id='{{ product.id }}'> 
+                                            {{ product.metafields.judgeme.widget }} 
+                                        </div> 
+                                        <!-- End of Judge.me code -->
+                                    </div>
+                                {%- endif -%}
+                            </div>
+                        </div>
+                    </div>
+                    {%- assign collapsible_first = false -%}
+                {%- if collapsible_last == forloop.index -%}
+                    </div>
+                {%- endif -%}
+            {%- when 'more-action' -%}
+                <div class="product-single__more-action d-flex flex-wrap pt-1 {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    {%- if block.settings.product_size_charts -%}
+                        {%- assign size_charts = '' -%}
+                        {% for collection in product.collections limit: limit %}
+                            {%- if collection.metafields.custom.size_charts != blank -%}
+                                {%- assign size_charts = collection.metafields.custom.size_charts | metafield_tag -%}
+                                {% break %}
+                            {%- endif -%}
+                        {% endfor %}
+                        {%- if size_charts != '' -%}
+                            {%- assign size_charts_title_default = 'products.general.size_guide' | t  -%}
+                            {%- assign size_charts_title = block.settings.product_size_charts_title | default: size_charts_title_default  -%}
+                            <a href="javascript:void(0)" class="product-single__btn--size-guide me-3 me-xl-4" data-bs-toggle="modal" data-bs-target="#size-guide" data-bs-backdrop="static" title="{{ size_charts_title }}">
+                                <div class="d-flex align-items-center">
+                                    {%- if block.settings.product_size_charts_icon -%}
+                                        {{ block.settings.product_size_charts_icon | image_url: width: block.settings.product_size_charts_icon.width | image_tag: loading: 'lazy', class: 'img-fluid' }}
+                                    {%- else -%}
+                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_4275_6124)"><path d="M13 13V8" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 13V8" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 13V5" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 5V11C1 12.1 1.9 13 3 13H15C16.1 13 17 12.1 17 11V5" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g><defs><clipPath id="clip0_4275_6124"><rect width="18" height="18" fill="white"/></clipPath></defs></svg>
+                                    {%- endif -%}
+                                    <span class="d-flex ms-1 heading-color fs-14 fw-medium">{{ size_charts_title }}</span>
+                                </div>
+                            </a>
+                            <div class="modal fade" id="size-guide" tabindex="-1" aria-labelledby="size-guideLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                                    <div class="modal-content">
+                                        <div class="modal-header py-2">
+                                            <h4 class="modal-title w-100 text-center lh-1">{{ size_charts_title }}</h4>
+                                            <button type="button" class="vela__btn-close position-relative mw-40" data-bs-dismiss="modal" aria-label="Close">
+                                                {% render 'icons', icon: 'line', class: 'icon-line position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                                                {% render 'icons', icon: 'line', class: 'icon-line1 position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                                            </button>
+                                        </div>
+                                        <div class="modal-body scroll-style">
+                                            {{ size_charts }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {%- endif -%}
+                    {%- endif -%}
+                    {%- if block.settings.product_question -%}
+                            {%- assign question_title_default = 'products.general.ask_a_question' | t  -%}
+                            {%- assign question_title = block.settings.product_question_title | default: question_title_default  -%}
+                            <a href="javascript:void(0)" class="product-single__btn--question position-relative  me-3 me-xl-4" data-bs-toggle="modal" data-bs-target="#ask-question" data-bs-backdrop="static" title="{{ 'products.general.ask_a_question' | t }}">
+                                <div class="d-flex align-items-center">
+                                    {%- if block.settings.product_question_icon -%}
+                                        {{ block.settings.product_question_icon | image_url: width: block.settings.product_question_icon.width | image_tag: loading: 'lazy', class: 'img-fluid' }}
+                                    {%- else -%}
+                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_4275_6132)"><path d="M9 17C13.4183 17 17 13.4183 17 9C17 4.58172 13.4183 1 9 1C4.58172 1 1 4.58172 1 9C1 13.4183 4.58172 17 9 17Z" stroke="#7C99A9" stroke-width="1.5" stroke-miterlimit="10"/><path d="M6 6.5C6 5.12 7.12 4 8.5 4C9.88 4 11 5.12 11 6.5C11 7.28 10.26 8.6 9 9V11" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14C10 13.4477 9.55228 13 9 13C8.44772 13 8 13.4477 8 14C8 14.5523 8.44772 15 9 15C9.55228 15 10 14.5523 10 14Z" fill="#7C99A9"/></g><defs><clipPath id="clip0_4275_6132"><rect width="18" height="18" fill="white"/></clipPath></defs></svg>
+                                    {%- endif -%}
+                                    <span class="d-flex ms-1 heading-color fs-14 fw-medium">{{ question_title }}</span>
+                                </div>
+                            </a>
+                            {%- assign button_text = 'templates.contact.form.send' | t  -%}
+                            {%- render 'contact-form-popup', formId: 'ask-question', formTitle: question_title, product: '', buttonTitle: button_text  -%}
+                    {%- endif -%}
+                    {%- if block.settings.product_share -%}
+                        {% comment %}Social sharing{% endcomment %}
+                        <a href="javascript:void(0)" class="product-single__social-sharing position-relative  me-3 me-xl-4" data-bs-toggle="modal" data-bs-target="#product-single__share" data-bs-backdrop="static" title="{{ block.settings.share_label }}">
+                            <div class="d-flex align-items-center">
+                                {%- if block.settings.product_share_icon -%}
+                                    {{ block.settings.product_share_icon | image_url: width: block.settings.product_share_icon.width | image_tag: loading: 'lazy', class: 'img-fluid' }}
+                                {%- else -%}
+                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_4275_6143)"><path d="M7 9C7 10.66 5.66 12 4 12C2.34 12 1 10.66 1 9C1 7.34 2.34 6 4 6C5.66 6 7 7.34 7 9Z" stroke="#7C99A9" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round"/><path d="M17 3C17 4.11 16.11 5 15 5C13.89 5 13 4.11 13 3C13 1.89 13.89 1 15 1C16.11 1 17 1.9 17 3Z" stroke="#7C99A9" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round"/><path d="M17 15C17 16.11 16.11 17 15 17C13.89 17 13 16.11 13 15C13 13.89 13.89 13 15 13C16.11 13 17 13.9 17 15Z" stroke="#7C99A9" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round"/><path d="M13 4L7 8" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 14L7 10" stroke="#7C99A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g><defs><clipPath id="clip0_4275_6143"><rect width="18" height="18" fill="white"/></clipPath></defs></svg>
+                                {% endif %}
+                                <span class="d-flex ms-1 heading-color fs-14 fw-medium">{{ block.settings.share_label }}</span>
+                            </div>
+                        </a>
+                        <div class="modal fade" id="product-single__share" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header py-3 px-4">
+                                        <h4 class="modal-title w-100 lh-1">{{ 'products.general.copy_link' | t }}</h4>
+                                        <button type="button" class="vela__btn-close position-absolute end-0 top-0 mt-2 me-4" data-bs-dismiss="modal" aria-label="Close">
+                                            {% render 'icons', icon: 'line', class: 'icon-line position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                                            {% render 'icons', icon: 'line', class: 'icon-line1 position-absolute top-50 start-50', attr: 'width="10" height="10"' %}
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="px-1">
+                                            <div class="d-flex">
+                                                <input class="form-control" type="text" value="{{ shop.url | append: product.url }}" id="shareProductUrl">
+                                                <button id="shareProducButton" class="show-tooltip border-0 rounded-circle d-flex align-items-center justify-content-center p-0 lh-1 ms-2" onclick="copyToClipboard()" data-title-success="{{ 'products.general.copy_link_success' | t }}">
+                                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.92 4H2V17H13.92V4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 1H17V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                                    <div class="tooltip bs-tooltip-top" role="tooltip">
+                                                        <div class="tooltip-arrow"></div>
+                                                        <div class="tooltip-inner">
+                                                            {{ 'products.general.copy_link' | t }}
+                                                        </div>
+                                                    </div>
+                                                </button>                                             
+                                            </div>
+                                            {% include 'product-sharing', share_title: product.title, share_permalink: product.url, share_image: product.featured_media %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <script>
+                            function copyToClipboard() {
+                                var shareProductUrl = document.getElementById("shareProductUrl");
+                                shareProductUrl.select();
+                                shareProductUrl.setSelectionRange(0, 99999); 
+                                navigator.clipboard.writeText(shareProductUrl.value);
+                                var shareButtonTooltip = document.getElementById("shareProducButton");
+                                let textSuccess = shareButtonTooltip.getAttribute("data-title-success");
+                                shareButtonTooltip.setAttribute("title", textSuccess);
+                                const tooltipText = shareButtonTooltip.querySelector('.tooltip-inner');
+                                if (tooltipText) {
+                                    tooltipText.innerHTML = textSuccess;
+                                }
+                            }
+                        </script>
+                    {%- endif -%}
+                </div>
+            {%- when 'variant_picker' -%}
+                {% unless product.has_only_default_variant %}
+                    {%- render 'variant-picker', block: block, product: product -%}
+                {% endunless %}
+            {%- when 'buy_buttons' -%}
+                <div class="buy_buttons--wrap {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    {%- capture "form_classes" -%}
+                        js-addtocart-form product-single__form{% if product.has_only_default_variant %} product-single__form--no-variants{% endif %}
+                    {%- endcapture %}
+                    {% form 'product', product, class:form_classes, data-product-form: '' %}
+                        <select name="id" class="js-product-select--{{ section.id }} product-single__variants d-none">
+                            {%- for variant in product.variants -%}
+                                {%- if variant.available -%}
+                                <option {% if variant == product.selected_or_first_available_variant %}
+                                    selected="selected" {% endif %}
+                                    data-sku="{{ variant.sku }}"
+                                    value="{{ variant.id }}">
+                                    {{ variant.title }} - {{ variant.price | money_with_currency }}
+                                </option>
+                                {%- else -%}
+                                <option disabled="disabled">
+                                    {{ variant.title }} - {{ 'products.product.sold_out' | t }}
+                                </option>
+                                {%- endif -%}
+                            {%- endfor -%}
+                        </select>
+                        <div class="product-single__buttons row align-items-start g-2 pt-md-2" style="--bs-gutter-x: 8px;">
+                            {% comment %}Product quantity{% endcomment %}
+                            {%- if block.settings.quantity_enabled -%}
+                                {%- assign quantity_class = '' -%}
+                                {% unless current_variant.available %}
+                                    {%- assign quantity_class = 'd-none' -%}
+                                {% endunless %}
+                                <div class="js-quantity-selector product-quantity align-items-center col-auto {{ quantity_class }} {% if settings.pre-order-style == 'popup' and preOrder %} d-none {% else %} d-flex{% endif %}">
+                                    <label for="Quantity" class="product-quantity__label d-none">{{ 'products.product.quantity' | t }}:</label>
+                                    <div class="product-quantity__selector">
+                                        {%- if block.settings.quantity_selector == 'text' -%}
+                                            <div class="vela-qty">
+                                                <button type="button" class="js-qty-adjust vela-qty__adjust vela-qty__adjust--minus disable" aria-label="{{ 'sections.cart.reduce_quantity' | t }}">                                            
+                                                    {% render 'icons', icon: 'minus' %}
+                                                </button>
+                                                <input type="number" name="quantity" class="js-qty-number vela-qty__number" value="{{ product.selected_or_first_available_variant.quantity_rule.min }}" data-min="{{ product.selected_or_first_available_variant.quantity_rule.min }}"
+                                                    min="{{ product.selected_or_first_available_variant.quantity_rule.min }}"
+                                                    {% if product.selected_or_first_available_variant.quantity_rule.max != null %}
+                                                    data-max="{{ product.selected_or_first_available_variant.quantity_rule.max }}"
+                                                    max="{{ product.selected_or_first_available_variant.quantity_rule.max }}"
+                                                    {% endif %} aria-label="quantity">
+                                                <button type="button" class="js-qty-adjust vela-qty__adjust vela-qty__adjust--plus" aria-label="{{ 'sections.cart.increase_quantity' | t }}">
+                                                    {% render 'icons', icon: 'plus' %}
+                                                </button>
+                                            </div>
+                                        {%- else -%}
+                                            <select name="quantity" id="Quantity" class="product-quantity__select form-select">
+                                                {%- for i in (1..10) -%}
+                                                    <option {% if forloop.first %}selected="selected"{% endif %} value="{{ i }}">{{ i }}</option>
+                                                {%- endfor -%}
+                                            </select>
+                                        {%- endif -%}
+                                    </div>
+                                </div>
+                            {%- endif -%}
+                            {% comment %}Add to cart button{% endcomment %}
+                            <div
+                                class="col pdp-buttons"
+                                data-notify-me="{{ settings.outofstock_enable }}"
+                            >
+                                {%- assign notify_me_class = '' -%}
+                                {%- if settings.outofstock_enable -%}
+                                    {% unless preOrder %}
+                                        {% unless current_variant.available %}
+                                            {%- assign notify_me_class = ' d-none' -%}
+                                        {% endunless %}
+                                    {% endunless %}
+                                {%- endif -%}
+                                <button
+                                    class="btn btn--add-to-cart{{ notify_me_class }}"{% unless current_variant.available %} disabled="disabled"{% endunless %}
+                                    type="submit"
+                                    name="add" data-preorder="{{ preOrder }}">
+                                        {% render 'icons', icon: 'plus', attr: 'width="10" height="10"' %}
+                                        <span class="btn__text">
+                                            {% if preOrder %}
+                                                {{ 'products.product.pre_order' | t }}
+                                            {% elsif current_variant.available %}
+                                                {{ 'products.product.add_to_cart' | t }}
+                                            {% else %}
+                                                {{ 'products.product.sold_out' | t }}
+                                            {% endif %}
+                                        </span>
+                                </button>
+                                {%- if settings.outofstock_enable -%}
+                                    {% unless preOrder %}
+                                        {%- render 'back-in-stock-button', current_variant: current_variant -%}
+                                    {% endunless %}
+                                {%- endif -%}
+                            </div>
+                            {%- if settings.product_wishlist and block.settings.product_wishlist -%}
+                                <div class="col-auto">
+                                    <a href="javascript:void(0)" class="product-single__wishlist js-btn-wishlist btn--wishlist show-tooltip" data-product-handle="{{ product.handle }}" title="{{ 'products.product.add_to_wishlist' | t }}">
+                                        {%- if page_wishlist -%}
+                                            {% render 'icons', icon: 'trash', attr: 'width="18" height="18"' %}
+                                        {%- else -%}
+                                            {% render 'icons', icon: 'heart', class: 'heart', attr: 'width="18" height="18"' %}
+                                            {% render 'icons', icon: 'heart-fill', class: 'heart-fill', attr: 'width="18" height="18"' %}
+                                        {%- endif -%}
+                                        <div class="tooltip bs-tooltip-top" role="tooltip">
+                                            <div class="tooltip-arrow"></div>
+                                            <div class="tooltip-inner">
+                                                {{ 'products.product.add_to_wishlist' | t }}
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            {%- endif -%}
+                        </div>
+                        {% if block.settings.enable_payment_button %}
+                            <div class="product-single__payment mt-1 pt-2{% unless current_variant.available %} d-none{% endunless %}">
+                                {%- capture terms_conditions -%}
+                                    {%- if settings.terms_conditions != blank -%}
+                                    {{ 'sections.cart.terms_conditions_html' | t: link: settings.terms_conditions }}
+                                    {%- elsif shop.terms_of_service.body != blank  -%}
+                                    {{ 'sections.cart.terms_conditions_html' | t: link: shop.terms_of_service.url }}
+                                    {%- else -%}
+                                    {{ 'sections.cart.terms_conditions_html' | t: link: '#' }}
+                                    {%- endif -%}
+                                {%- endcapture -%}
+                                <input class="form-check-input rounded-circle" type="checkbox" value="" id="product-single__terms_conditions">
+                                <label class="form-check-label" for="product-single__terms_conditions">
+                                    {{ terms_conditions }}
+                                </label>
+                                <div class="product-single__button-payment lh-1 mt-1 pt-2">
+                                    {{ form | payment_button }}
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endform %}
+                    {% if settings.outofstock_enable %}
+                        {%- render 'back-in-stock-notification', current_variant: current_variant -%}
+                    {% endif %}
+                </div>
+                {%- if block.settings.enable_pickup_availability -%}
+                    {%- render 'pickup-stores', product: product -%}
+                {%- endif -%}
+            {%- when 'product_count_sale' -%}
+                {% if current_variant.available %}
+                    {%- assign count = block.settings.product_sale_count | split: "-" -%}
+                    {%- assign time = block.settings.product_sale_time | split: "-" -%}
+                    <div class="product-single__number-sale d-flex align-items-center {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" data-min="{{ count[0] }}" data-max="{{ count[1] }}" data-time_min="{{ time[0] }}" data-time_max="{{ time[1] }}" data-id_product="{{ product.id }}">
+                        <svg class="" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10C3 15 6.24 17 9 17C12 17 15 15 15 10C15 6 9 1.9 9 1.9C9 1.9 9.24 8 5.24 6C3.45 5.11 3 10 3 10Z" stroke="#515167" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round"/><path d="M10.2402 11.5C10.2402 12.33 9.79023 12 9.24023 12C8.69023 12 8.24023 12.33 8.24023 11.5C8.24023 10.67 8.69023 9 9.24023 9C9.79023 9 10.2402 10.67 10.2402 11.5Z" stroke="#515167" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="count heading-color fw-semibold mx-1"></span> {{ block.settings.product_count_sale_text }} <span class="time heading-color mx-1"></span> {{ block.settings.product_count_sale_unit }}
+                    </div>
+                {% endif %}
+            {%- when 'product_real_time' -%}
+                {%- assign count = block.settings.product_real_time_count | split: "-" -%}
+                <div class="product-single__number-view d-flex align-items-center {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" data-min="{{ count[0] }}" data-max="{{ count[1] }}" data-timeout="{{ block.settings.product_real_time_change }}">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.8996 9C16.8996 9 13.9996 15 8.99961 15C3.99961 15 1.09961 9 1.09961 9C1.09961 9 3.99961 3 8.99961 3C13.9996 3 16.8996 9 16.8996 9Z" stroke="#515167" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round"/><path d="M9 11C10.1046 11 11 10.1046 11 9C11 7.89543 10.1046 7 9 7C7.89543 7 7 7.89543 7 9C7 10.1046 7.89543 11 9 11Z" stroke="#515167" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="heading-color fw-semibold mx-1"></span> {{ block.settings.product_real_time_text }}
+                </div> 
+            {%- when 'popup' -%}
+                <div class="popup--wrap {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}">
+                    <button type="button" class="btn btn-link p-0 text-decoration-underline fw-medium" data-bs-toggle="modal" data-bs-target="#PopupModal-{{ block.id }}">
+                        {{ block.settings.text | default: block.settings.page.title }}
+                    </button>
+                    <div class="modal fade" id="PopupModal-{{ block.id }}" data-bs-backdrop="false" tabindex="-1"  aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-scrollable modal-xl">
+                            <div class="modal-content">
+                                <div class="modal-header py-2">
+                                    <h5 class="modal-title">{{ block.settings.text | default: block.settings.page.title }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    {{ block.settings.page.content }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {%- when 'border' -%}
+                <div class="product-single__border {{ block.settings.block_margin_m }} {{ block.settings.block_margin }}" style="border-top: {{ block.settings.border_style }} {{ block.settings.border_width }}px {{ block.settings.border_color }}; line-height: 0;">&nbsp;</div>
+            {%- when 'complementary' -%}
+                {%- include 'product-complementary'-%}
+        {%- endcase -%}
+    {%- endfor -%}
+</div>
