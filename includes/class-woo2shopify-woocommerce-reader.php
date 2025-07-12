@@ -28,6 +28,10 @@ class Woo2Shopify_WooCommerce_Reader {
         $args = wp_parse_args($args, $defaults);
 
         // Force WPML to return only default language products
+        error_log('Woo2Shopify: Checking WPML functions...');
+        error_log('Woo2Shopify: icl_get_default_language exists: ' . (function_exists('icl_get_default_language') ? 'YES' : 'NO'));
+        error_log('Woo2Shopify: icl_get_languages exists: ' . (function_exists('icl_get_languages') ? 'YES' : 'NO'));
+
         if (function_exists('icl_get_default_language')) {
             global $sitepress;
             if ($sitepress) {
@@ -748,9 +752,13 @@ class Woo2Shopify_WooCommerce_Reader {
     private function get_product_translations($product_id) {
         $translations = array();
 
+        error_log("Woo2Shopify: Getting translations for product ID: {$product_id}");
+        error_log('Woo2Shopify: WPML icl_get_languages function exists: ' . (function_exists('icl_get_languages') ? 'YES' : 'NO'));
+
         // WPML Support
         if (function_exists('icl_get_languages')) {
             $languages = icl_get_languages('skip_missing=0');
+            error_log('Woo2Shopify: WPML languages found: ' . print_r(array_keys($languages), true));
 
             foreach ($languages as $lang_code => $language) {
                 $translated_id = apply_filters('wpml_object_id', $product_id, 'product', false, $lang_code);

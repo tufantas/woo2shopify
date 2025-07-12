@@ -20,7 +20,7 @@ class Woo2Shopify_Data_Mapper {
      */
     public function __construct() {
         $this->video_processor = new Woo2Shopify_Video_Processor();
-        $this->langify_api = new Woo2Shopify_Langify_API();
+        // Langify API removed - using Shopify Translate & Adapt only
     }
 
     /**
@@ -69,13 +69,16 @@ class Woo2Shopify_Data_Mapper {
         // Remove HTML tags and decode entities
         $title = wp_strip_all_tags($title);
         $title = html_entity_decode($title, ENT_QUOTES, 'UTF-8');
-        
+
         // Trim and limit length (Shopify limit is 255 characters)
         $title = trim($title);
         if (strlen($title) > 255) {
             $title = substr($title, 0, 252) . '...';
         }
-        
+
+        // Make JSON-safe
+        $title = $this->escape_for_json($title);
+
         return $title;
     }
     
@@ -600,128 +603,12 @@ class Woo2Shopify_Data_Mapper {
         // Debug: Check if translations exist
         woo2shopify_log("Product translations data: " . json_encode($wc_product_data['translations'] ?? 'No translations'), 'debug');
 
-        // Add translations as metafields (Multiple format support)
+        // DISABLED: Translation metafields moved to batch processor for better control
+        // All translation handling now done in register_translation_metafields()
         if (!empty($wc_product_data['translations'])) {
-            error_log('Woo2Shopify: Adding translation metafields for languages: ' . implode(', ', array_keys($wc_product_data['translations'])));
-
-            foreach ($wc_product_data['translations'] as $lang_code => $translation) {
-                // Ensure HTML formatting is preserved
-                $description = $this->preserve_html_formatting($translation['description']);
-                $short_description = $this->preserve_html_formatting($translation['short_description']);
-
-                // Format 1: Langify App format (correct namespace and keys)
-                $metafields[] = array(
-                    'namespace' => 'langify',
-                    'key' => "title_{$lang_code}",
-                    'value' => $translation['name'],
-                    'type' => 'single_line_text_field'
-                );
-
-                $metafields[] = array(
-                    'namespace' => 'langify',
-                    'key' => "body_html_{$lang_code}",
-                    'value' => $description,
-                    'type' => 'rich_text_field'
-                );
-
-                // Langify specific metafields for theme integration
-                $metafields[] = array(
-                    'namespace' => 'langify',
-                    'key' => "seo_title_{$lang_code}",
-                    'value' => $translation['name'],
-                    'type' => 'single_line_text_field'
-                );
-
-                $metafields[] = array(
-                    'namespace' => 'langify',
-                    'key' => "seo_description_{$lang_code}",
-                    'value' => strip_tags($short_description),
-                    'type' => 'single_line_text_field'
-                );
-
-                if (!empty($short_description)) {
-                    $metafields[] = array(
-                        'namespace' => 'langify',
-                        'key' => "excerpt_{$lang_code}",
-                        'value' => $short_description,
-                        'type' => 'rich_text_field'
-                    );
-                }
-
-                // Format 2: Shopify Translate & Adapt compatible
-                $metafields[] = array(
-                    'namespace' => 'translations',
-                    'key' => "title_{$lang_code}",
-                    'value' => $translation['name'],
-                    'type' => 'single_line_text_field'
-                );
-
-                $metafields[] = array(
-                    'namespace' => 'translations',
-                    'key' => "body_html_{$lang_code}",
-                    'value' => $description,
-                    'type' => 'rich_text_field'
-                );
-
-                error_log("Woo2Shopify: Added translation metafields for language: {$lang_code}");
-            }
-
-            // Shopify Translate & Adapt compatible format
-            $translation_data = array();
-            foreach ($wc_product_data['translations'] as $lang_code => $translation) {
-                $translation_data[$lang_code] = array(
-                    'title' => $translation['name'],
-                    'description' => $translation['description'],
-                    'short_description' => $translation['short_description'] ?? ''
-                );
-            }
-
-            // Shopify Translate & Adapt specific format
-            foreach ($wc_product_data['translations'] as $lang_code => $translation) {
-                // Title translation
-                $metafields[] = array(
-                    'namespace' => 'custom',
-                    'key' => "translation_title_{$lang_code}",
-                    'value' => $translation['name'],
-                    'type' => 'single_line_text_field'
-                );
-
-                // Description translation
-                $metafields[] = array(
-                    'namespace' => 'custom',
-                    'key' => "translation_description_{$lang_code}",
-                    'value' => $translation['description'],
-                    'type' => 'multi_line_text_field'
-                );
-
-                // Short description translation
-                if (!empty($translation['short_description'])) {
-                    $metafields[] = array(
-                        'namespace' => 'custom',
-                        'key' => "translation_excerpt_{$lang_code}",
-                        'value' => $translation['short_description'],
-                        'type' => 'multi_line_text_field'
-                    );
-                }
-            }
-
-            // Store as JSON for Shopify Translate & Adapt
-            $metafields[] = array(
-                'namespace' => 'shopify_translate',
-                'key' => 'product_translations',
-                'value' => json_encode($translation_data),
-                'type' => 'json'
-            );
-
-            // Store available languages
-            $metafields[] = array(
-                'namespace' => 'shopify_translate',
-                'key' => 'available_languages',
-                'value' => implode(',', array_keys($wc_product_data['translations'])),
-                'type' => 'single_line_text_field'
-            );
-
-            woo2shopify_log("Added translation metafields for languages: " . implode(', ', array_keys($wc_product_data['translations'])), 'info');
+            woo2shopify_log("Translation handling moved to batch processor for better error control", 'info');
+            // Currency handled by Shopify Markets - no need for manual metafields
+            // $this->add_multi_currency_metafields($metafields, $wc_product_data);
         }
 
         // Add multi-currency prices as metafields
@@ -819,29 +706,189 @@ class Woo2Shopify_Data_Mapper {
     }
 
     /**
-     * Preserve HTML formatting for rich text content
+     * Preserve HTML formatting for rich text content and ensure JSON safety
      */
     private function preserve_html_formatting($content) {
         if (empty($content)) {
             return '';
         }
 
+        // PRESERVE PARAGRAPH STRUCTURE for better readability
+        // Keep essential HTML tags for formatting
+        $content = strip_tags($content, '<p><br><strong><em><b><i><ul><li><ol><h1><h2><h3><h4><h5><h6>');
+
         // Clean up WordPress-specific formatting
         $content = str_replace(array("\r\n", "\r"), "\n", $content);
 
-        // Preserve paragraphs
-        $content = wpautop($content);
+        // Ensure paragraphs are properly formatted
+        if (!empty($content) && strpos($content, '<p>') === false) {
+            // If no paragraphs, wrap content and convert line breaks
+            $content = wpautop($content);
+        }
 
-        // Clean up extra whitespace but preserve structure
-        $content = preg_replace('/\n\s*\n/', "\n\n", $content);
+        // Clean up extra whitespace but preserve paragraph structure
+        $content = preg_replace('/\n\s*\n/', "\n", $content);
         $content = trim($content);
 
-        // Ensure proper HTML structure
-        if (!empty($content) && strpos($content, '<p>') === false && strpos($content, '<div>') === false) {
-            // Wrap plain text in paragraphs
-            $content = '<p>' . nl2br($content) . '</p>';
+        // CRITICAL: Make JSON-safe while preserving HTML structure
+        $content = $this->make_json_safe_html($content);
+
+        return $content;
+    }
+
+    /**
+     * Escape content for safe JSON transmission
+     */
+    private function escape_for_json($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // AGGRESSIVE APPROACH: Remove all problematic characters
+
+        // Step 1: Convert to UTF-8 and normalize
+        $content = mb_convert_encoding($content, 'UTF-8', 'auto');
+
+        // Step 2: Remove HTML tags completely (safer for JSON)
+        $content = strip_tags($content);
+
+        // Step 3: Replace newlines with spaces
+        $content = str_replace(array("\n", "\r", "\t"), ' ', $content);
+
+        // Step 4: Remove all quotes and replace with HTML entities
+        $content = str_replace('"', '&quot;', $content);
+        $content = str_replace("'", '&#39;', $content);
+
+        // Step 5: Remove curly quotes and other problematic Unicode
+        $content = preg_replace('/[\x{2018}\x{2019}\x{201A}\x{201B}]/u', '&#39;', $content);
+        $content = preg_replace('/[\x{201C}\x{201D}\x{201E}\x{201F}]/u', '&quot;', $content);
+
+        // Step 6: Clean up multiple spaces
+        $content = preg_replace('/\s+/', ' ', $content);
+        $content = trim($content);
+
+        // Step 7: Final safety - keep only safe characters
+        $content = preg_replace('/[^\x20-\x7E\x{00A0}-\x{00FF}\x{0100}-\x{017F}\x{0180}-\x{024F}]/u', '', $content);
+
+        // Step 8: Final validation
+        $test_json = json_encode($content);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Woo2Shopify: JSON encoding failed, using ASCII fallback: ' . json_last_error_msg());
+            // Ultimate fallback: ASCII only
+            $content = preg_replace('/[^\x20-\x7E]/', '', $content);
         }
 
         return $content;
+    }
+
+    /**
+     * Make HTML content JSON-safe while preserving structure
+     */
+    private function make_json_safe_html($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // Step 1: Fix quotes inside HTML attributes and content
+        $content = str_replace('"', '&quot;', $content);
+        $content = str_replace("'", '&#39;', $content);
+
+        // Step 2: Handle newlines properly (preserve in HTML)
+        $content = str_replace(array("\r\n", "\r"), "\n", $content);
+
+        // Step 3: Remove curly quotes and problematic Unicode
+        $content = preg_replace('/[\x{2018}\x{2019}]/u', '&#39;', $content);
+        $content = preg_replace('/[\x{201C}\x{201D}]/u', '&quot;', $content);
+
+        // Step 4: Ensure UTF-8 encoding
+        $content = mb_convert_encoding($content, 'UTF-8', 'auto');
+
+        // Step 5: Final JSON validation
+        $test_json = json_encode($content);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Woo2Shopify: JSON encoding failed for HTML content: ' . json_last_error_msg());
+            // Fallback: strip HTML but preserve line breaks
+            $content = strip_tags($content);
+            $content = str_replace("\n", '<br>', $content);
+        }
+
+        return $content;
+    }
+
+    /**
+     * Add multi-currency pricing metafields for different languages
+     */
+    private function add_multi_currency_metafields(&$metafields, $wc_product_data) {
+        // Currency mapping for different languages
+        $currency_map = array(
+            'tr' => array('code' => 'TRY', 'symbol' => '₺', 'rate' => 1.0),
+            'de' => array('code' => 'EUR', 'symbol' => '€', 'rate' => 0.031), // 1 TRY = 0.031 EUR (approximate)
+            'en' => array('code' => 'USD', 'symbol' => '$', 'rate' => 0.034)  // 1 TRY = 0.034 USD (approximate)
+        );
+
+        // Get base price from WooCommerce (assuming it's in TRY)
+        $base_price = floatval($wc_product_data['price'] ?? 0);
+        $base_regular_price = floatval($wc_product_data['regular_price'] ?? $base_price);
+        $base_sale_price = floatval($wc_product_data['sale_price'] ?? 0);
+
+        if ($base_price <= 0) {
+            return; // No valid price to convert
+        }
+
+        foreach ($currency_map as $lang_code => $currency_info) {
+            $converted_price = round($base_price * $currency_info['rate'], 2);
+            $converted_regular_price = round($base_regular_price * $currency_info['rate'], 2);
+            $converted_sale_price = $base_sale_price > 0 ? round($base_sale_price * $currency_info['rate'], 2) : 0;
+
+            // Price metafields for each language/currency
+            $metafields[] = array(
+                'namespace' => 'pricing',
+                'key' => "price_{$lang_code}",
+                'value' => (string)$converted_price,
+                'type' => 'number_decimal'
+            );
+
+            $metafields[] = array(
+                'namespace' => 'pricing',
+                'key' => "regular_price_{$lang_code}",
+                'value' => (string)$converted_regular_price,
+                'type' => 'number_decimal'
+            );
+
+            if ($converted_sale_price > 0) {
+                $metafields[] = array(
+                    'namespace' => 'pricing',
+                    'key' => "sale_price_{$lang_code}",
+                    'value' => (string)$converted_sale_price,
+                    'type' => 'number_decimal'
+                );
+            }
+
+            // Currency info metafields
+            $metafields[] = array(
+                'namespace' => 'pricing',
+                'key' => "currency_code_{$lang_code}",
+                'value' => $currency_info['code'],
+                'type' => 'single_line_text_field'
+            );
+
+            $metafields[] = array(
+                'namespace' => 'pricing',
+                'key' => "currency_symbol_{$lang_code}",
+                'value' => $currency_info['symbol'],
+                'type' => 'single_line_text_field'
+            );
+
+            // Formatted price string
+            $formatted_price = $currency_info['symbol'] . number_format($converted_price, 2);
+            $metafields[] = array(
+                'namespace' => 'pricing',
+                'key' => "formatted_price_{$lang_code}",
+                'value' => $formatted_price,
+                'type' => 'single_line_text_field'
+            );
+        }
+
+        error_log('Woo2Shopify: Added multi-currency pricing metafields for languages: ' . implode(', ', array_keys($currency_map)));
     }
 }

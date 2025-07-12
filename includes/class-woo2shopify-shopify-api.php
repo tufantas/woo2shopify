@@ -169,14 +169,208 @@ class Woo2Shopify_Shopify_API {
      */
     public function get_product($product_id) {
         $this->check_rate_limit();
-        
+
         $response = $this->make_request('GET', "products/{$product_id}.json");
-        
+
         if (is_wp_error($response)) {
             return $response;
         }
-        
+
         return isset($response['product']) ? $response['product'] : false;
+    }
+
+    /**
+     * Make GraphQL request
+     */
+    public function make_graphql_request($query, $variables = array()) {
+        $url = trailingslashit($this->store_url) . "admin/api/{$this->api_version}/graphql.json";
+
+        $headers = array(
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'Woo2Shopify/' . WOO2SHOPIFY_VERSION
+        );
+
+        // Use appropriate authentication method
+        if (!empty($this->access_token)) {
+            $headers['X-Shopify-Access-Token'] = $this->access_token;
+        } elseif (!empty($this->api_key) && !empty($this->api_secret)) {
+            $headers['Authorization'] = 'Basic ' . base64_encode($this->api_key . ':' . $this->api_secret);
+        }
+
+        $body = array(
+            'query' => $query,
+            'variables' => $variables
+        );
+
+        // Try multiple JSON encoding strategies
+        $json_body = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Woo2Shopify GraphQL JSON Error (attempt 1): ' . json_last_error_msg());
+
+            // Try with more conservative encoding
+            $json_body = json_encode($body, JSON_HEX_QUOT | JSON_HEX_APOS);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log('Woo2Shopify GraphQL JSON Error (attempt 2): ' . json_last_error_msg());
+
+                // Last resort: basic encoding
+                $json_body = json_encode($body);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    error_log('Woo2Shopify GraphQL JSON Error (final): ' . json_last_error_msg());
+                    error_log('Woo2Shopify GraphQL Problematic Data: ' . print_r($body, true));
+                    return new WP_Error('json_error', 'JSON encoding failed after multiple attempts: ' . json_last_error_msg());
+                }
+            }
+        }
+
+        $args = array(
+            'method' => 'POST',
+            'headers' => $headers,
+            'body' => $json_body,
+            'timeout' => $this->timeout,
+            'sslverify' => true
+        );
+
+        $response = wp_remote_request($url, $args);
+
+        if (is_wp_error($response)) {
+            error_log('Woo2Shopify GraphQL Error: ' . $response->get_error_message());
+            return $response;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (isset($data['errors'])) {
+            error_log('Woo2Shopify GraphQL Errors: ' . print_r($data['errors'], true));
+            return new WP_Error('graphql_error', 'GraphQL errors: ' . print_r($data['errors'], true));
+        }
+
+        return isset($data['data']) ? $data['data'] : false;
+    }
+
+    /**
+     * Enable locale for translations
+     */
+    public function enable_locale($locale_code) {
+        $query = '
+            mutation shopLocaleEnable($locale: String!) {
+                shopLocaleEnable(locale: $locale) {
+                    shopLocale {
+                        locale
+                        name
+                        published
+                    }
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }
+        ';
+
+        $variables = array(
+            'locale' => $locale_code
+        );
+
+        return $this->make_graphql_request($query, $variables);
+    }
+
+    /**
+     * Register translation for a resource
+     */
+    public function register_translation($resource_id, $resource_type, $locale, $key, $value, $digest = null) {
+        // Clean and validate the value before sending
+        $clean_value = $this->clean_translation_value($value);
+
+        if (empty($clean_value)) {
+            error_log("Woo2Shopify: Empty translation value for {$key} in {$locale}");
+            return new WP_Error('empty_value', 'Translation value is empty');
+        }
+
+        $query = '
+            mutation translationsRegister($resourceId: ID!, $translations: [TranslationInput!]!) {
+                translationsRegister(resourceId: $resourceId, translations: $translations) {
+                    translations {
+                        locale
+                        key
+                        value
+                    }
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }
+        ';
+
+        $variables = array(
+            'resourceId' => "gid://shopify/{$resource_type}/{$resource_id}",
+            'translations' => array(
+                array(
+                    'locale' => $locale,
+                    'key' => $key,
+                    'value' => $clean_value,
+                    'translatableContentDigest' => $digest
+                )
+            )
+        );
+
+        // Test JSON encoding before sending
+        $test_json = json_encode($variables);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("Woo2Shopify: JSON encoding test failed for translation: " . json_last_error_msg());
+            error_log("Woo2Shopify: Problematic value: " . substr($clean_value, 0, 200));
+            return new WP_Error('json_error', 'Translation value causes JSON error: ' . json_last_error_msg());
+        }
+
+        error_log("Woo2Shopify: Registering translation - Locale: {$locale}, Key: {$key}, Value length: " . strlen($clean_value));
+
+        return $this->make_graphql_request($query, $variables);
+    }
+
+    /**
+     * Clean translation value for GraphQL - ULTRA SAFE
+     */
+    private function clean_translation_value($value) {
+        if (empty($value)) {
+            return '';
+        }
+
+        // Step 1: Remove dangerous characters
+        $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $value);
+
+        // Step 2: Handle quotes that break JSON - CRITICAL
+        $value = str_replace(array('"', "'", '\\'), array('&quot;', '&#39;', '&#92;'), $value);
+
+        // Step 3: Normalize line endings to spaces (safer for JSON)
+        $value = str_replace(array("\r\n", "\r", "\n"), ' ', $value);
+
+        // Step 4: Clean multiple spaces
+        $value = preg_replace('/\s+/', ' ', $value);
+
+        // Step 5: Trim
+        $value = trim($value);
+
+        // Step 6: Ensure valid UTF-8
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+
+        // Step 7: Final validation - if still problematic, strip HTML
+        if (strpos($value, '<') !== false && strpos($value, '>') !== false) {
+            // Test if this HTML causes JSON issues
+            $test_json = json_encode(array('test' => $value));
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log("Woo2Shopify: HTML content causes JSON error, stripping HTML");
+                $value = strip_tags($value);
+                $value = html_entity_decode($value, ENT_QUOTES, 'UTF-8');
+            }
+        }
+
+        return $value;
     }
     
     /**

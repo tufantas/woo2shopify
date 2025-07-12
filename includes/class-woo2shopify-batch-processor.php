@@ -285,7 +285,13 @@ class Woo2Shopify_Batch_Processor {
             }
             
             $shopify_product_id = $shopify_product['id'];
-            
+
+            // DISABLE Translation API (too problematic) - Use metafields instead
+            // $this->register_product_translations($shopify_product_id, $wc_product_data);
+
+            // Register translations as metafields (more reliable)
+            $this->register_translation_metafields($shopify_product_id, $wc_product_data);
+
             // Migrate images and videos if enabled
             $media_results = array();
 
@@ -652,6 +658,255 @@ class Woo2Shopify_Batch_Processor {
         // This is already handled by the logger in process_single_product
         // But we can add additional tracking if needed
         error_log("Woo2Shopify: Marked product {$product_id} as processed (Shopify ID: {$shopify_id})");
+    }
+
+    /**
+     * Register product translations using Shopify Translation API
+     */
+    private function register_product_translations($shopify_product_id, $wc_product_data) {
+        if (empty($wc_product_data['translations'])) {
+            return;
+        }
+
+        error_log("Woo2Shopify: Registering translations for product {$shopify_product_id}");
+
+        foreach ($wc_product_data['translations'] as $lang_code => $translation) {
+            // Skip if this is the default language
+            if ($lang_code === 'en') {
+                continue;
+            }
+
+            try {
+                // Enable locale if not already enabled
+                $locale_result = $this->shopify_api->enable_locale($lang_code);
+                if (is_wp_error($locale_result)) {
+                    error_log("Woo2Shopify: Failed to enable locale {$lang_code}: " . $locale_result->get_error_message());
+                    continue;
+                }
+
+                // Register title translation (ULTRA SAFE - strip HTML if needed)
+                $safe_title = $this->make_json_safe($translation['name'], false); // No HTML in titles
+                $title_result = $this->shopify_api->register_translation(
+                    $shopify_product_id,
+                    'Product',
+                    $lang_code,
+                    'title',
+                    $safe_title
+                );
+
+                if (is_wp_error($title_result)) {
+                    error_log("Woo2Shopify: Failed to register title translation for {$lang_code}: " . $title_result->get_error_message());
+                } else {
+                    error_log("Woo2Shopify: Successfully registered title translation for {$lang_code}");
+                }
+
+                // Register description translation (ULTRA SAFE - strip HTML if causes issues)
+                $safe_description = $this->make_json_safe($translation['description'], true); // Allow HTML but strip if problematic
+                $desc_result = $this->shopify_api->register_translation(
+                    $shopify_product_id,
+                    'Product',
+                    $lang_code,
+                    'body_html',
+                    $safe_description
+                );
+
+                if (is_wp_error($desc_result)) {
+                    error_log("Woo2Shopify: Failed to register description translation for {$lang_code}: " . $desc_result->get_error_message());
+                } else {
+                    error_log("Woo2Shopify: Successfully registered description translation for {$lang_code}");
+                }
+
+                // Small delay to respect rate limits
+                usleep(100000); // 0.1 second
+
+            } catch (Exception $e) {
+                error_log("Woo2Shopify: Exception during translation registration for {$lang_code}: " . $e->getMessage());
+            }
+        }
+
+        error_log("Woo2Shopify: Completed translation registration for product {$shopify_product_id}");
+    }
+
+    /**
+     * Escape content for GraphQL JSON - AGGRESSIVE CLEANING
+     */
+    private function escape_for_graphql($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // Log original content for debugging
+        error_log("Woo2Shopify: Original content: " . substr($content, 0, 100) . "...");
+
+        // Step 1: Basic cleanup
+        $content = trim($content);
+
+        // Step 2: Remove problematic characters that break JSON
+        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content);
+
+        // Step 3: Normalize quotes - this is critical for JSON
+        $content = str_replace('"', '&quot;', $content);
+        $content = str_replace("'", '&#39;', $content);
+
+        // Handle smart quotes using Unicode codes (safer)
+        $content = str_replace(chr(226).chr(128).chr(156), '&quot;', $content); // Left double quote
+        $content = str_replace(chr(226).chr(128).chr(157), '&quot;', $content); // Right double quote
+        $content = str_replace(chr(226).chr(128).chr(152), '&#39;', $content);  // Left single quote
+        $content = str_replace(chr(226).chr(128).chr(153), '&#39;', $content);  // Right single quote
+
+        // Step 4: Handle line breaks properly
+        $content = str_replace(array("\r\n", "\r", "\n"), ' ', $content);
+
+        // Step 5: Clean up multiple spaces
+        $content = preg_replace('/\s+/', ' ', $content);
+
+        // Step 6: Ensure valid UTF-8
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+        }
+
+        // Step 7: Final trim
+        $content = trim($content);
+
+        // Log cleaned content
+        error_log("Woo2Shopify: Cleaned content: " . substr($content, 0, 100) . "...");
+
+        return $content;
+    }
+
+    /**
+     * Make content absolutely JSON-safe - NUCLEAR OPTION
+     */
+    private function make_json_safe($content, $allow_html = true) {
+        if (empty($content)) {
+            return '';
+        }
+
+        error_log("Woo2Shopify: Making JSON safe - Original: " . substr($content, 0, 100) . "...");
+
+        // Step 1: Basic cleanup
+        $content = trim($content);
+
+        // Step 2: Test if current content is JSON-safe
+        $test_array = array('test' => $content);
+        $test_json = json_encode($test_array);
+
+        if (json_last_error() === JSON_ERROR_NONE) {
+            error_log("Woo2Shopify: Content is already JSON-safe");
+            return $content;
+        }
+
+        error_log("Woo2Shopify: Content causes JSON error: " . json_last_error_msg());
+
+        // Step 3: If HTML is not allowed or causes issues, strip it
+        if (!$allow_html || (strpos($content, '<') !== false && strpos($content, '>') !== false)) {
+            error_log("Woo2Shopify: Stripping HTML to make JSON-safe");
+            $content = strip_tags($content);
+            $content = html_entity_decode($content, ENT_QUOTES, 'UTF-8');
+        }
+
+        // Step 4: Remove all problematic characters
+        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content);
+
+        // Step 5: Replace quotes with safe alternatives
+        $content = str_replace('"', '&quot;', $content);
+        $content = str_replace("'", '&#39;', $content);
+        $content = str_replace('\\', '&#92;', $content);
+
+        // Step 6: Normalize whitespace
+        $content = str_replace(array("\r\n", "\r", "\n"), ' ', $content);
+        $content = preg_replace('/\s+/', ' ', $content);
+        $content = trim($content);
+
+        // Step 7: Final JSON test
+        $final_test = json_encode(array('test' => $content));
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("Woo2Shopify: STILL JSON ERROR after cleaning: " . json_last_error_msg());
+            // Last resort: keep only alphanumeric and basic punctuation
+            $content = preg_replace('/[^\p{L}\p{N}\s\.\,\!\?\-\(\)]/u', '', $content);
+            $content = trim($content);
+        }
+
+        error_log("Woo2Shopify: Final JSON-safe content: " . substr($content, 0, 100) . "...");
+        return $content;
+    }
+
+    /**
+     * Register translations as metafields (more reliable than Translation API)
+     */
+    private function register_translation_metafields($shopify_product_id, $wc_product_data) {
+        if (empty($wc_product_data['translations'])) {
+            return;
+        }
+
+        error_log("Woo2Shopify: Registering translation metafields for product {$shopify_product_id}");
+
+        foreach ($wc_product_data['translations'] as $lang_code => $translation) {
+            // Skip if this is the default language
+            if ($lang_code === 'en') {
+                continue;
+            }
+
+            try {
+                // Create title metafield
+                $title_metafield = array(
+                    'namespace' => 'custom',
+                    'key' => "title_{$lang_code}",
+                    'value' => strip_tags($translation['name']), // Safe: no HTML in titles
+                    'type' => 'single_line_text_field'
+                );
+
+                $title_result = $this->shopify_api->create_product_metafield($shopify_product_id, $title_metafield);
+
+                if (is_wp_error($title_result)) {
+                    error_log("Woo2Shopify: Failed to create title metafield for {$lang_code}: " . $title_result->get_error_message());
+                } else {
+                    error_log("Woo2Shopify: Successfully created title metafield for {$lang_code}");
+                }
+
+                // Create long description metafield (preserve HTML but make safe)
+                $safe_description = $this->make_json_safe($translation['description'], true);
+                $desc_metafield = array(
+                    'namespace' => 'custom',
+                    'key' => "description_{$lang_code}",
+                    'value' => $safe_description,
+                    'type' => 'multi_line_text_field'
+                );
+
+                $desc_result = $this->shopify_api->create_product_metafield($shopify_product_id, $desc_metafield);
+
+                if (is_wp_error($desc_result)) {
+                    error_log("Woo2Shopify: Failed to create description metafield for {$lang_code}: " . $desc_result->get_error_message());
+                } else {
+                    error_log("Woo2Shopify: Successfully created description metafield for {$lang_code}");
+                }
+
+                // Create short description metafield
+                $safe_short_description = $this->make_json_safe($translation['short_description'], true);
+                $short_desc_metafield = array(
+                    'namespace' => 'custom',
+                    'key' => "short_description_{$lang_code}",
+                    'value' => $safe_short_description,
+                    'type' => 'multi_line_text_field'
+                );
+
+                $short_desc_result = $this->shopify_api->create_product_metafield($shopify_product_id, $short_desc_metafield);
+
+                if (is_wp_error($short_desc_result)) {
+                    error_log("Woo2Shopify: Failed to create short description metafield for {$lang_code}: " . $short_desc_result->get_error_message());
+                } else {
+                    error_log("Woo2Shopify: Successfully created short description metafield for {$lang_code}");
+                }
+
+                // Small delay to respect rate limits
+                usleep(100000); // 0.1 second
+
+            } catch (Exception $e) {
+                error_log("Woo2Shopify: Exception during metafield creation for {$lang_code}: " . $e->getMessage());
+            }
+        }
+
+        error_log("Woo2Shopify: Completed translation metafield registration for product {$shopify_product_id}");
     }
 }
 

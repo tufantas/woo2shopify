@@ -1,0 +1,62 @@
+{% comment %}
+  Woo2Shopify Multilingual Product Integration
+  
+  This snippet automatically displays translated product content based on URL language
+  
+  Usage in product templates:
+  {% render 'multilingual-product-snippet', product: product %}
+  
+  Supported languages: English (en), Turkish (tr), German (de)
+{% endcomment %}
+
+{% assign current_locale = request.locale.iso_code %}
+{% assign default_locale = 'en' %}
+
+{% comment %} Get translated title {% endcomment %}
+{% assign translated_title = '' %}
+{% case current_locale %}
+  {% when 'tr' %}
+    {% assign translated_title = product.metafields.custom.title_tr %}
+  {% when 'de' %}
+    {% assign translated_title = product.metafields.custom.title_de %}
+  {% else %}
+    {% assign translated_title = product.title %}
+{% endcase %}
+
+{% comment %} Get translated description {% endcomment %}
+{% assign translated_description = '' %}
+{% case current_locale %}
+  {% when 'tr' %}
+    {% assign translated_description = product.metafields.custom.description_tr %}
+  {% when 'de' %}
+    {% assign translated_description = product.metafields.custom.description_de %}
+  {% else %}
+    {% assign translated_description = product.description %}
+{% endcase %}
+
+{% comment %} Display translated content {% endcomment %}
+<div class="woo2shopify-multilingual-content">
+  {% if translated_title != blank %}
+    <h1 class="product-title">{{ translated_title }}</h1>
+  {% else %}
+    <h1 class="product-title">{{ product.title }}</h1>
+  {% endif %}
+  
+  {% if translated_description != blank %}
+    <div class="product-description">{{ translated_description }}</div>
+  {% else %}
+    <div class="product-description">{{ product.description }}</div>
+  {% endif %}
+</div>
+
+{% comment %} Debug information (remove in production) {% endcomment %}
+{% if settings.woo2shopify_debug %}
+<div style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-size: 12px;">
+  <strong>Woo2Shopify Debug:</strong><br>
+  Current Locale: {{ current_locale }}<br>
+  Title TR: {{ product.metafields.custom.title_tr }}<br>
+  Title DE: {{ product.metafields.custom.title_de }}<br>
+  Description TR: {{ product.metafields.custom.description_tr | truncate: 100 }}<br>
+  Description DE: {{ product.metafields.custom.description_de | truncate: 100 }}
+</div>
+{% endif %}

@@ -114,14 +114,11 @@ class Woo2Shopify {
             'includes/functions.php', // Load functions first
             'includes/class-woo2shopify-admin.php',
             'includes/class-woo2shopify-shopify-api.php',
-            'includes/class-woo2shopify-langify-api.php',
             'includes/class-woo2shopify-woocommerce-reader.php',
             'includes/class-woo2shopify-data-mapper.php',
             'includes/class-woo2shopify-image-migrator.php',
             'includes/class-woo2shopify-video-processor.php',
             'includes/class-woo2shopify-batch-processor.php',
-            'includes/class-woo2shopify-enhanced-batch-processor.php',
-            'includes/class-woo2shopify-selective-migrator.php',
             'includes/class-woo2shopify-logger.php',
             'includes/class-woo2shopify-database.php'
         );

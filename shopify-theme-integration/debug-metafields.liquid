@@ -1,0 +1,73 @@
+{% comment %}
+  Woo2Shopify Debug Tool
+  
+  This snippet shows all translation metafields for debugging
+  
+  Usage: Add this to any product page to see available metafields
+  {% render 'debug-metafields', product: product %}
+{% endcomment %}
+
+<div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; margin: 20px 0; font-family: monospace; font-size: 12px;">
+  <h3 style="margin-top: 0; color: #495057;">🔍 Woo2Shopify Debug Information</h3>
+  
+  <div style="margin-bottom: 15px;">
+    <strong>Current Request Info:</strong><br>
+    Locale: <code>{{ request.locale.iso_code }}</code><br>
+    URL: <code>{{ request.path }}</code><br>
+    Host: <code>{{ request.host }}</code>
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <strong>Product Basic Info:</strong><br>
+    ID: <code>{{ product.id }}</code><br>
+    Handle: <code>{{ product.handle }}</code><br>
+    Title: <code>{{ product.title }}</code><br>
+    Description Length: <code>{{ product.description | size }}</code> chars
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <strong>Translation Metafields:</strong><br>
+    
+    <div style="margin: 10px 0;">
+      <strong>Turkish (TR):</strong><br>
+      Title: <code>{{ product.metafields.custom.title_tr | default: "❌ NOT FOUND" }}</code><br>
+      Description: <code>{{ product.metafields.custom.description_tr | truncate: 100 | default: "❌ NOT FOUND" }}</code>
+    </div>
+    
+    <div style="margin: 10px 0;">
+      <strong>German (DE):</strong><br>
+      Title: <code>{{ product.metafields.custom.title_de | default: "❌ NOT FOUND" }}</code><br>
+      Description: <code>{{ product.metafields.custom.description_de | truncate: 100 | default: "❌ NOT FOUND" }}</code>
+    </div>
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <strong>All Custom Metafields:</strong><br>
+    {% for metafield in product.metafields.custom %}
+      <code>custom.{{ metafield.first }}</code>: {{ metafield.last | truncate: 50 }}<br>
+    {% else %}
+      <em>No custom metafields found</em>
+    {% endfor %}
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <strong>Language Detection Test:</strong><br>
+    {% assign current_locale = request.locale.iso_code %}
+    {% case current_locale %}
+      {% when 'tr' %}
+        ✅ Turkish detected - Should show: <code>{{ product.metafields.custom.title_tr | default: "⚠️ Missing TR title" }}</code>
+      {% when 'de' %}
+        ✅ German detected - Should show: <code>{{ product.metafields.custom.title_de | default: "⚠️ Missing DE title" }}</code>
+      {% else %}
+        ✅ English/Default detected - Should show: <code>{{ product.title }}</code>
+    {% endcase %}
+  </div>
+  
+  <div style="background: #e9ecef; padding: 10px; border-radius: 4px;">
+    <strong>Quick Fix Instructions:</strong><br>
+    1. If metafields show "❌ NOT FOUND", run migration again<br>
+    2. If metafields exist but don't display, add theme integration<br>
+    3. If language detection fails, check URL format (/tr/, /de/, /en/)<br>
+    4. Remove this debug snippet in production
+  </div>
+</div>

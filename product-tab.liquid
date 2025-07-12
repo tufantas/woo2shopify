@@ -1,0 +1,298 @@
+{{ 'product-tab.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign section_classes = 'vela-section overflow-hidden product-tabs'
+  assign container_classes = 'container'
+  if section.settings.max_width and section.settings.full_width
+    assign section_classes = section_classes | append: ' mx-auto'
+  endif
+  if section.settings.full_width
+    assign container_classes = 'container-full'
+  endif
+  assign limit = section.settings.limit | plus: 0
+-%}
+
+{%- capture section_styles -%}
+  {% render 'section-styles', settings: section.settings %}
+{%- endcapture -%}
+
+<div
+  class="{{ section_classes }}"
+  style="{{ section_styles }}"
+>
+  <div class="{{ container_classes }}">
+    <div class="product-tabs__header">
+      {%- if section.settings.title != blank -%}
+        <h3 class="product-tabs__title heading">{{ section.settings.title | escape }}</h3>
+      {%- endif -%}
+      {%- if section.blocks.size > 0 -%}
+        {%- liquid
+          assign nav_item_classes = 'product-tabs__nav-item'
+          assign nav_link_classes = 'product-tabs__nav-link'
+          if section.settings.show_icon_only
+            assign nav_item_classes = nav_item_classes | append: ' product-tabs__nav-item--icon-only'
+            assign nav_link_classes = nav_link_classes | append: ' product-tabs__nav-link--icon-only'
+          endif
+        -%}
+        <ul class="nav product-tabs__nav" role="tablist">
+          {%- for block in section.blocks -%}
+            {%- liquid
+              assign title = block.settings.title | escape
+            -%}
+            <li class="{{ nav_item_classes }}">
+              <button
+                class="{{ nav_link_classes }}{% if forloop.first %} active{% endif %}"
+                type="button"
+                data-bs-toggle="tab"
+                data-bs-target="#{{ section.id }}-ptitem-{{ forloop.index }}"
+                role="tab"
+                aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+              >
+                {%- if block.settings.icon != blank -%}
+                  {{ block.settings.icon | image_url: width: 24, height: 24 | image_tag: class: 'category-menu__item-icon', loading: 'lazy', alt: title }}
+                {%- elsif block.settings.svg_icon != blank -%}
+                  {{ block.settings.svg_icon }}
+                {%- endif -%}
+                {{ title }}
+              </button>
+            </li>
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+    </div>
+    {%- if section.blocks.size > 0 -%}
+      {%- liquid
+        assign column_desktop = section.settings.column_desktop | plus: 0
+        assign column_tablet = section.settings.column_tablet | plus: 0
+        assign column_mobile = section.settings.column_mobile | plus: 0
+        assign styles = '--columns-large: ' | append: column_desktop | append: ';'
+        assign styles = styles | append: ' --columns-medium: ' | append: column_tablet | append: ';'
+        assign styles = styles | append: ' --columns-small: ' | append: column_mobile | append: ';'
+        assign styles = styles | append: ' --gap-large: ' | append: section.settings.space_between | append: 'px;'
+        assign styles = styles | append: ' --gap-small: ' | append: section.settings.space_between_m | append: 'px;'
+      -%}
+      <div class="product-tabs__content tab-content" role="tabpanel" tabindex="0">
+        {%- for block in section.blocks -%}
+          <div id="{{ section.id }}-ptitem-{{ forloop.index }}" class="tab-pane{% if forloop.first %} active{% endif %}">
+            <div class="product-tabs__grid" style="{{ styles }}">
+              {%- for product in block.settings.collection.products limit: limit -%}
+                <div class="product-tabs__grid-item">
+                  {% render 'product-grid-item', product: product, product_style: section.settings.product_style, slide_variableWidth: false, number: limit %}
+                </div>
+              {%- else -%}
+                {% render 'onboarding-featured-products', product_style: section.settings.product_style, slide_variableWidth: false, number: limit %}
+              {%- endfor -%}
+            </div>
+          </div>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Product tabs",
+  "tag": "section",
+  "class": "velaFramework",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:sections.global.settings.header_section.content"
+    },
+    {
+      "type": "checkbox",
+      "id": "full_width",
+      "label": "t:sections.global.settings.full_width.label"
+    },
+    {
+      "type": "text",
+      "id": "max_width",
+      "label": "t:sections.global.settings.max_width.label",
+      "info": "t:sections.global.settings.max_width.info"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "t:sections.global.settings.bg_color.label",
+      "default": "#1F1F27"
+    },
+    {
+      "type": "text",
+      "id": "padding_block",
+      "label": "t:sections.global.settings.padding.label",
+      "placeholder": "0px 0px",
+      "info": "t:sections.global.settings.padding.info"
+    },
+    {
+      "type": "text",
+      "id": "padding_block_m",
+      "label": "t:sections.global.settings.padding_mobile.label",
+      "placeholder": "0px 0px",
+      "info": "t:sections.global.settings.padding_mobile.info"
+    },
+    {
+      "type": "text",
+      "id": "margin_block",
+      "label": "t:sections.global.settings.margin.label",
+      "placeholder": "0px 0px"
+    },
+    {
+      "type": "header",
+      "content": "t:sections.global.settings.header_settings.content"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "title",
+      "label": "t:sections.global.settings.heading_section.label",
+      "default": "Trending This Week"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_icon_only",
+      "label": "Show icon only",
+      "info": "Applicable for mobile",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Layout Settings"
+    },
+    {
+      "type": "select",
+      "id": "product_style",
+      "label": "Product style",
+      "default": "style1",
+      "options": [
+        {
+          "value": "style1",
+          "label": "Style1"
+        },
+        {
+          "value": "style2",
+          "label": "Style2"
+        },
+        {
+          "value": "style3",
+          "label": "Style3"
+        },
+        {
+          "value": "style4",
+          "label": "Style4"
+        },
+        {
+          "value": "style5",
+          "label": "Style5"
+        }
+      ]
+    },
+    {
+      "type": "range",
+      "id": "limit",
+      "min": 1,
+      "max": 15,
+      "step": 1,
+      "label": "Maximum products to show",
+      "default": 10
+    },
+    {
+      "type": "range",
+      "id": "space_between",
+      "label": "Space between items",
+      "min": 0,
+      "max": 50,
+      "step": 1,
+      "default": 20,
+      "unit": "px",
+      "info": "Applicable on desktop and tablet."
+    },
+    {
+      "type": "range",
+      "id": "space_between_m",
+      "label": "Space between items on mobile",
+      "min": 0,
+      "max": 50,
+      "step": 1,
+      "default": 8,
+      "unit": "px",
+      "info": "Applicable on mobile."
+    },
+    {
+      "type": "range",
+      "id": "column_desktop",
+      "min": 1,
+      "max": 8,
+      "step": 1,
+      "label": "Number of columns on desktop",
+      "default": 5
+    },
+    {
+      "type": "range",
+      "id": "column_tablet",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "label": "Number of columns on tablet",
+      "default": 3
+    },
+    {
+      "type": "range",
+      "id": "column_mobile",
+      "min": 1,
+      "max": 5,
+      "step": 1,
+      "label": "Number of columns on mobile",
+      "default": 2
+    }
+  ],
+  "blocks": [
+    {
+      "type": "tab",
+      "name": "Tab item",
+      "settings": [
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Heading",
+          "default": "Tab heading"
+        },
+        {
+          "type": "collection",
+          "id": "collection",
+          "label": "Collection"
+        },
+        {
+          "type": "textarea",
+          "id": "svg_icon",
+          "label": "SVG icon"
+        },
+        {
+          "type": "image_picker",
+          "id": "icon",
+          "label": "Icon"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product tabs",
+      "category": "3. Product",
+      "blocks": [
+        {
+          "type": "tab"
+        },
+        {
+          "type": "tab"
+        },
+        {
+          "type": "tab"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}
